@@ -1,0 +1,107 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Owner {
+  id                   String         @id @default(uuid())
+  name                 String
+  email                String         @unique
+  passwordHash         String
+  whatsapp             String
+  barbershopName       String
+  barbershopAddress    String?
+  logoUrl              String?
+  googleAccessToken    String?
+  googleRefreshToken   String?
+  googleTokenExpiresAt DateTime?
+  monthlyGoal          Float?
+  services             Service[]
+  appointments         Appointment[]
+  workingHours         WorkingHours[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+}
+
+model Client {
+  id           String        @id @default(uuid())
+  name         String
+  whatsapp     String        @unique
+  email        String?
+  otpCode      String?
+  otpExpiresAt DateTime?
+  appointments Appointment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Service {
+  id           String        @id @default(uuid())
+  ownerId      String
+  owner        Owner         @relation(fields: [ownerId], references: [id])
+  name         String
+  price        Float
+  durationMin  Int
+  description  String?
+  active       Boolean       @default(true)
+  appointments Appointment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  ownerId       String
+  owner         Owner             @relation(fields: [ownerId], references: [id])
+  clientId      String
+  client        Client            @relation(fields: [clientId], references: [id])
+  serviceId     String
+  service       Service           @relation(fields: [serviceId], references: [id])
+  startAt       DateTime
+  endAt         DateTime
+  status        AppointmentStatus @default(SCHEDULED)
+  googleEventId String?
+  paymentStatus PaymentStatus     @default(PENDING)
+  paymentMethod PaymentMethod?
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([ownerId, startAt])
+  @@index([clientId])
+}
+
+model WorkingHours {
+  id        String  @id @default(uuid())
+  ownerId   String
+  owner     Owner   @relation(fields: [ownerId], references: [id])
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  active    Boolean @default(true)
+
+  @@index([ownerId, dayOfWeek])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  CARD
+}

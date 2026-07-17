@@ -1,0 +1,30 @@
+import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+export class RegisterOwnerDto {
+  @ApiProperty({ example: 'João Silva' })
+  @IsString()
+  name: string;
+
+  @ApiProperty({ example: 'joao@email.com' })
+  @IsEmail({}, { message: 'E-mail inválido' })
+  email: string;
+
+  @ApiProperty({ example: '123456', minLength: 6 })
+  @IsString()
+  @MinLength(6, { message: 'Senha deve ter no mínimo 6 caracteres' })
+  password: string;
+
+  @ApiProperty({ example: '5511999999999' })
+  @IsString()
+  whatsapp: string;
+
+  @ApiProperty({ example: 'Barbearia Luck' })
+  @IsString()
+  barbershopName: string;
+
+  @ApiProperty({ example: 'Rua das Flores, 123', required: false })
+  @IsOptional()
+  @IsString()
+  barbershopAddress?: string;
+}
