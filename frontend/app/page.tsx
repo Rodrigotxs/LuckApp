@@ -1,56 +1,213 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Scissors } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { obterUsuario } from '@/lib/auth';
+import { useMemo, useState } from 'react';
+import {
+  LuckSplash, LuckRolePicker, LuckLogin,
+  LuckUnitPicker, LuckClientSignup, LuckClientOTP, LuckClientDone,
+  LuckClientServices, LuckClientBarberPicker, LuckClientSchedule, LuckClientConfirm,
+  LuckClientHome, LuckClientReschedule,
+  LuckOwnerSignup, LuckOwnerCalendar, LuckOwnerServices, LuckOwnerDone,
+  LuckOwnerDashboard, LuckOwnerAgendaEditor, LuckOwnerNewMenu,
+  LuckOwnerBookForm, LuckOwnerBlockForm, LuckOwnerFinance,
+  LuckProfile,
+} from '@/components/screens';
+import { LUCK_BARBERS, LUCK_SERVICES } from '@/components/screens/data';
 
-export default function SplashPage() {
-  const router = useRouter();
+type Step =
+  | 'splash' | 'role' | 'login'
+  | 'c-unit' | 'c-signup' | 'c-otp' | 'c-done'
+  | 'c-services' | 'c-barber' | 'c-schedule' | 'c-confirm'
+  | 'c-home' | 'c-reschedule' | 'c-profile'
+  | 'o-signup' | 'o-calendar' | 'o-services' | 'o-done'
+  | 'o-dashboard' | 'o-agenda' | 'o-new' | 'o-book' | 'o-block'
+  | 'o-finance' | 'o-profile';
 
-  useEffect(() => {
-    const user = obterUsuario();
-    if (user?.role === 'owner') router.replace('/painel');
-    else if (user?.role === 'client') router.replace('/agendar');
-  }, [router]);
+export default function LuckApp() {
+  const [step, setStep] = useState<Step>('splash');
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+  const [selectedBarberId, setSelectedBarberId] = useState<string | null>(null);
+  const [ownerUnitId, setOwnerUnitId] = useState<string | null>(null);
+  const [signupMethod, setSignupMethod] = useState<'whatsapp' | 'email'>('whatsapp');
+  const [clientLoggedIn, setClientLoggedIn] = useState(false);
+  const [hasAppointment, setHasAppointment] = useState(true);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
-  return (
-    <div className="min-h-screen bg-[#1A3A6B] flex flex-col items-center justify-between px-6 py-16">
-      <div className="flex-1 flex flex-col items-center justify-center gap-8">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-24 h-24 bg-[#C0392B] rounded-full flex items-center justify-center shadow-xl">
-            <Scissors size={48} className="text-white" strokeWidth={1.5} />
-          </div>
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-white tracking-wider">LUCK</h1>
-            <p className="text-[#BDBDBD] text-sm tracking-[0.3em] uppercase mt-1">Barbearia</p>
-          </div>
-        </div>
-        <div className="w-12 h-0.5 bg-[#C0392B]" />
-        <p className="text-white/70 text-center text-sm max-w-xs leading-relaxed">
-          Agendamento online rápido e fácil. Cortes clássicos com hora marcada.
-        </p>
-      </div>
+  const barber = useMemo(() => LUCK_BARBERS.find((b) => b.id === selectedBarberId), [selectedBarberId]);
+  const services = useMemo(() => LUCK_SERVICES.filter((s) => selectedServiceIds.includes(s.id)), [selectedServiceIds]);
+  const toggleService = (id: string) =>
+    setSelectedServiceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-      <div className="w-full max-w-sm flex flex-col gap-4">
-        <Button variant="primary" size="lg" className="w-full" onClick={() => router.push('/cadastro/cliente')}>
-          Sou Cliente
-        </Button>
-        <Button
-          variant="ghost" size="lg"
-          className="w-full border-white/30 text-white hover:bg-white/10"
-          onClick={() => router.push('/cadastro/dono')}
-        >
-          Sou Dono de Barbearia
-        </Button>
-        <button
-          onClick={() => router.push('/login')}
-          className="text-white/50 text-sm text-center mt-2 hover:text-white/80 transition-colors"
-        >
-          Já tenho conta → Entrar
-        </button>
-      </div>
-    </div>
-  );
+  const goto = (s: Step) => setStep(s);
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setClientLoggedIn(false);
+    goto('role');
+  };
+
+  switch (step) {
+    case 'splash':
+      return <LuckSplash onDone={() => goto('role')} />;
+    case 'role':
+      return (
+        <LuckRolePicker
+          onPick={(role) => goto(role === 'client' ? 'c-unit' : role === 'owner' ? 'o-signup' : 'login')}
+        />
+      );
+    case 'login':
+      return (
+        <LuckLogin
+          onBack={() => goto('role')}
+          onEnter={(role) => {
+            if (role === 'client') setClientLoggedIn(true);
+            goto(role === 'client' ? 'c-home' : 'o-dashboard');
+          }}
+        />
+      );
+
+    // Client flow
+    case 'c-unit':
+      return (
+        <LuckUnitPicker
+          onBack={() => goto(clientLoggedIn ? 'c-home' : 'role')}
+          selectedUnitId={selectedUnitId}
+          setSelectedUnitId={setSelectedUnitId}
+          onNext={() => goto(clientLoggedIn ? 'c-services' : 'c-signup')}
+        />
+      );
+    case 'c-signup':
+      return (
+        <LuckClientSignup
+          onBack={() => goto('c-unit')}
+          onNext={() => goto('c-otp')}
+          method={signupMethod}
+          setMethod={setSignupMethod}
+        />
+      );
+    case 'c-otp':
+      return (
+        <LuckClientOTP
+          onBack={() => goto('c-signup')}
+          onNext={() => {
+            setClientLoggedIn(true);
+            goto('c-done');
+          }}
+          method={signupMethod}
+        />
+      );
+    case 'c-done':
+      return <LuckClientDone onNext={() => goto('c-services')} />;
+    case 'c-services':
+      return (
+        <LuckClientServices
+          onBack={() => goto(clientLoggedIn ? 'c-unit' : 'c-done')}
+          selectedIds={selectedServiceIds}
+          toggleSelected={toggleService}
+          onNext={() => goto('c-barber')}
+        />
+      );
+    case 'c-barber':
+      return (
+        <LuckClientBarberPicker
+          onBack={() => goto('c-services')}
+          selectedUnitId={selectedUnitId}
+          selectedBarberId={selectedBarberId}
+          setSelectedBarberId={setSelectedBarberId}
+          onNext={() => goto('c-schedule')}
+        />
+      );
+    case 'c-schedule':
+      return (
+        <LuckClientSchedule
+          onBack={() => goto('c-barber')}
+          services={services}
+          barber={barber}
+          selectedSlot={selectedSlot}
+          setSelectedSlot={setSelectedSlot}
+          onNext={() => goto('c-confirm')}
+        />
+      );
+    case 'c-confirm':
+      return (
+        <LuckClientConfirm
+          onBack={() => goto('c-schedule')}
+          services={services}
+          slot={selectedSlot}
+          barber={barber}
+          confirmed={confirmed}
+          onConfirm={() => setConfirmed(true)}
+        />
+      );
+
+    case 'c-home':
+      return (
+        <LuckClientHome
+          onBookNew={() => goto('c-unit')}
+          onLogout={logout}
+          onProfile={() => goto('c-profile')}
+          onReschedule={() => goto('c-reschedule')}
+          hasAppointment={hasAppointment}
+        />
+      );
+    case 'c-reschedule':
+      return (
+        <LuckClientReschedule
+          onBack={() => goto('c-home')}
+          onSubmit={() => goto('c-home')}
+          hasAppointment={hasAppointment}
+          onBookNew={() => goto('c-unit')}
+        />
+      );
+    case 'c-profile':
+      return <LuckProfile role="client" onBack={() => goto('c-home')} onLogout={logout} onCalendar={() => goto('c-reschedule')} />;
+
+    // Owner flow
+    case 'o-signup':
+      return (
+        <LuckOwnerSignup
+          onBack={() => goto('role')}
+          onNext={() => goto('o-calendar')}
+          selectedUnitId={ownerUnitId}
+          setSelectedUnitId={setOwnerUnitId}
+        />
+      );
+    case 'o-calendar':
+      return <LuckOwnerCalendar onBack={() => goto('o-signup')} onNext={() => goto('o-services')} />;
+    case 'o-services':
+      return <LuckOwnerServices onBack={() => goto('o-calendar')} onNext={() => goto('o-done')} />;
+    case 'o-done':
+      return <LuckOwnerDone onNext={() => goto('o-dashboard')} />;
+    case 'o-dashboard':
+      return (
+        <LuckOwnerDashboard
+          onGoFinance={() => goto('o-finance')}
+          onNew={() => goto('o-new')}
+          onProfile={() => goto('o-profile')}
+          onCalendar={() => goto('o-agenda')}
+        />
+      );
+    case 'o-agenda':
+      return <LuckOwnerAgendaEditor onBack={() => goto('o-dashboard')} />;
+    case 'o-profile':
+      return <LuckProfile role="owner" onBack={() => goto('o-dashboard')} onLogout={logout} />;
+    case 'o-finance':
+      return <LuckOwnerFinance onBack={() => goto('o-dashboard')} />;
+    case 'o-new':
+      return (
+        <LuckOwnerNewMenu
+          onClose={() => goto('o-dashboard')}
+          onBook={() => goto('o-book')}
+          onBlock={() => goto('o-block')}
+        />
+      );
+    case 'o-book':
+      return <LuckOwnerBookForm onBack={() => goto('o-new')} onConfirm={() => goto('o-dashboard')} />;
+    case 'o-block':
+      return <LuckOwnerBlockForm onBack={() => goto('o-new')} onConfirm={() => goto('o-dashboard')} />;
+
+    default:
+      return <LuckSplash onDone={() => goto('role')} />;
+  }
 }

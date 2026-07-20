@@ -10,6 +10,16 @@ export class CreateAppointmentDto {
   @IsString()
   serviceId: string;
 
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  unitId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  barberId?: string;
+
   @ApiProperty({ example: '2024-04-15T10:00:00.000Z' })
   @IsDateString()
   startAt: string;

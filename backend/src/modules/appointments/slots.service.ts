@@ -23,7 +23,13 @@ export class SlotsService {
     private googleCalendar: GoogleCalendarService,
   ) {}
 
-  async calcularSlotsDisponiveis(ownerId: string, date: string, serviceId: string): Promise<Slot[]> {
+  async calcularSlotsDisponiveis(
+    ownerId: string,
+    date: string,
+    serviceId: string,
+    barberId?: string,
+    unitId?: string,
+  ): Promise<Slot[]> {
     const data = parseISO(date);
     const diaSemana = data.getDay();
 
@@ -35,9 +41,12 @@ export class SlotsService {
 
     const owner = await this.prisma.owner.findUnique({ where: { id: ownerId } });
 
+    // Se barberId informado, olha só a agenda do barbeiro; senão, olha o dono todo
     const agendamentosDB = await this.prisma.appointment.findMany({
       where: {
         ownerId,
+        ...(barberId ? { barberId } : {}),
+        ...(unitId ? { unitId } : {}),
         startAt: { gte: startOfDay(data), lte: endOfDay(data) },
         status: { notIn: ['CANCELLED'] },
       },

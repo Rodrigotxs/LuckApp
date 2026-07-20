@@ -1,38 +1,44 @@
 # Barbearia Luck
 
-Sistema de agendamento multi-tenant para barbearias. Backend NestJS + Frontend Next.js mobile-first.
+Sistema de agendamento multi-tenant, multi-unidade, com barbeiros individuais. Backend NestJS + Frontend Next.js mobile-first fiel ao design entregue pelo Claude Design.
 
 ## Stack
 
 - **Backend:** Node.js + TypeScript + NestJS + PostgreSQL + Prisma ORM
-- **Frontend:** React + Next.js 16 (App Router) + Tailwind CSS
+- **Frontend:** React + Next.js 16 (App Router) + Tailwind + CSS puro (design tokens)
 - **Auth:** JWT (donos) + OTP via WhatsApp (clientes)
-- **Integrações:** Google Calendar API + WhatsApp (Evolution API / Twilio)
+- **Integrações:** Google Calendar API (OAuth 2.0) + WhatsApp (Evolution API / Twilio)
 - **Infra:** Docker Compose (PostgreSQL + Redis)
 
-## Identidade visual
+## Identidade visual — tokens (`frontend/app/globals.css`)
 
 | Token | Hex | Uso |
 |---|---|---|
-| `--color-red` | `#C0392B` | CTAs, bordas de destaque |
-| `--color-navy` | `#1A3A6B` | Cabeçalhos, elementos secundários |
-| `--color-white` | `#FFFFFF` | Fundo principal |
-| `--color-gray-light` | `#F5F5F5` | Fundo secundário |
-| `--color-gray` | `#BDBDBD` | Divisores, desabilitado |
-| `--color-charcoal` | `#2C2C2C` | Texto principal |
+| `--red` | `#C0392B` | CTAs, bordas de destaque, cor principal do cliente |
+| `--red-soft` | `#C0392B14` | Fundos suaves de estado ativo do cliente |
+| `--navy` | `#1A3A6B` | CTAs do dono, elementos secundários |
+| `--navy-soft` | `#1A3A6B14` | Fundos suaves do dono |
+| `--bg` / `--bg2` | `#FFFFFF` / `#F5F5F5` | Fundo principal / secundário |
+| `--gray` / `--gray-soft` | `#BDBDBD` / `#E8E8E8` | Divisores / borders |
+| `--ink` | `#2C2C2C` | Texto principal |
+| `--whatsapp` | `#25D366` | CTA WhatsApp |
+
+**Tipografia:** Playfair Display (títulos), Inter (corpo), Bebas Neue (eyebrow), JetBrains Mono (código/hora), Dancing Script (assinatura "Luck").
 
 ## Estrutura
 
 ```
 barbearia-luck/
 ├── backend/          # NestJS API (porta 3001)
-├── frontend/         # Next.js (porta 3000)
+├── frontend/         # Next.js SPA (porta 3000)
 └── docker-compose.yml
 ```
 
+O frontend é uma SPA client-side (`app/page.tsx`) que age como state-machine de telas — o mesmo padrão do handoff. Todas as telas ficam em `frontend/components/screens/` e o design system em `frontend/components/luck/`.
+
 ## Como rodar
 
-### 1. Subir infraestrutura
+### 1. Infraestrutura
 ```bash
 docker compose up -d
 ```
@@ -41,8 +47,8 @@ docker compose up -d
 ```bash
 cd backend
 npm install
-npx prisma migrate deploy   # aplica as migrations
-npx prisma db seed          # cria barbearia demo (opcional)
+npx prisma migrate deploy   # aplica migrations (Owner, Unit, Barber, Service, Appointment...)
+npx prisma db seed          # cria dono demo + 2 unidades + 3 barbeiros + 4 serviços
 npm run start:dev
 ```
 - API: http://localhost:3001
@@ -60,79 +66,51 @@ npm run dev
 
 - E-mail: `demo@barbearialuck.com`
 - Senha: `123456`
-- Link público de agendamento: `http://localhost:3000/agendar/<ownerId>` (o `ownerId` é impresso pelo seed)
-
-## Variáveis de ambiente
-
-### `backend/.env`
-```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/barbearia_luck"
-JWT_SECRET="seu-secret-aqui"
-JWT_EXPIRES_IN="7d"
-REDIS_URL="redis://localhost:6379"
-
-GOOGLE_CLIENT_ID=""
-GOOGLE_CLIENT_SECRET=""
-GOOGLE_REDIRECT_URI="http://localhost:3001/auth/google/callback"
-
-WHATSAPP_API_URL=""
-WHATSAPP_API_KEY=""
-WHATSAPP_INSTANCE=""
-
-FRONTEND_URL="http://localhost:3000"
-PORT=3001
-```
-
-### `frontend/.env.local`
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3001
-```
+- 2 unidades (Atlântica RJ, Bom Pastor SP), 3 barbeiros e 4 serviços já configurados.
 
 ## Endpoints principais
 
 ### Auth
-- `POST /auth/owner/register` — cadastro do dono
-- `POST /auth/owner/login` — login do dono → JWT
-- `POST /auth/client/send-otp` — envia OTP via WhatsApp
-- `POST /auth/client/verify-otp` — valida OTP → JWT do cliente
-- `GET /auth/google` — inicia OAuth Google Calendar
-- `GET /auth/google/callback` — recebe tokens
+- `POST /auth/owner/register` · `POST /auth/owner/login`
+- `POST /auth/client/send-otp` · `POST /auth/client/verify-otp`
+- `GET /auth/google` (OAuth) · `GET /auth/google/callback`
+
+### Unidades (novo)
+- `GET /units/public/:ownerId` — lista pública para agendamento
+- `GET|POST|PATCH|DELETE /units` (autenticado)
+
+### Barbeiros (novo)
+- `GET /barbers/public/:ownerId?unitId=` — lista pública (filtro por unidade)
+- `GET|POST|PATCH|DELETE /barbers` (autenticado)
 
 ### Serviços
-- `GET /services` — lista do dono autenticado
-- `POST /services` — cria serviço
-- `PATCH /services/:id` — edita
-- `DELETE /services/:id` — desativa
-- `GET /services/public/:ownerId` — lista pública para agendamento
+- `GET /services/public/:ownerId` (público) · `GET|POST|PATCH|DELETE /services` (autenticado)
 
 ### Agendamentos
-- `GET /appointments/available-slots?ownerId&date&serviceId` — horários livres
-- `POST /appointments` — cliente cria agendamento
-- `GET /appointments/owner` — agenda do dono
-- `GET /appointments/client` — histórico do cliente
-- `PATCH /appointments/:id/status` — atualiza status
-- `PATCH /appointments/:id/payment` — registra pagamento
-- `DELETE /appointments/:id` — cancela
+- `GET /appointments/available-slots?ownerId&date&serviceId&barberId&unitId`
+- `POST /appointments` (aceita `unitId` / `barberId` opcionais)
+- `GET /appointments/owner` · `GET /appointments/client`
+- `PATCH /appointments/:id/status` · `PATCH /appointments/:id/payment` · `DELETE /appointments/:id`
 
 ### Financeiro
 - `GET /financial/summary?period=today|week|month`
 - `GET /financial/report?startDate&endDate`
-- `GET /financial/goals` / `PATCH /financial/goals`
+- `GET|PATCH /financial/goals`
 
-## Telas
+## Telas (SPA em `/`)
 
-**Cliente:** `/`, `/cadastro/cliente`, `/cadastro/verificar`, `/agendar/[ownerId]`, `/agendar/[ownerId]/horario`, `/agendar/[ownerId]/confirmar`
+**Cliente:** Splash → RolePicker → UnitPicker → Signup (WhatsApp/E-mail) → OTP → Done → Services (múltipla) → BarberPicker → Schedule → Confirm → Home (logado) → Reschedule → Profile.
 
-**Dono:** `/login`, `/cadastro/dono`, `/cadastro/barbearia`, `/cadastro/servicos`, `/cadastro/google`, `/painel`, `/painel/financeiro`, `/painel/clientes`, `/painel/configuracoes`
+**Dono:** Signup + Unit → Calendar setup → Services setup → Done → Dashboard (agenda do dia) → AgendaEditor (bloqueio de dia/horário) → NewMenu (bottom-sheet) → BookForm / BlockForm → Finance (semana/mês/ano, export CSV) → Profile.
 
-## Lembretes automáticos
+## Cron de lembretes
 
-Cron job (`@Cron('*/5 * * * *')`) verifica agendamentos com 1 h de antecedência e dispara mensagem via WhatsApp. Ver `backend/src/modules/integrations/whatsapp/whatsapp-reminder.service.ts`.
+`backend/src/modules/integrations/whatsapp/whatsapp-reminder.service.ts` roda a cada 5 min (`@Cron('*/5 * * * *')`) e dispara lembretes 1 h antes de cada agendamento pendente.
 
 ## Lógica de slots disponíveis
 
 `backend/src/modules/appointments/slots.service.ts`:
-1. Carrega serviço e horário de funcionamento do dia da semana
-2. Busca agendamentos do banco (não cancelados) e eventos do Google Calendar
-3. Gera slots de `service.durationMin` em `service.durationMin` entre `startTime` e `endTime`
-4. Marca como ocupado os que colidem com algum período busy ou já passaram
+1. Carrega serviço e horário de funcionamento do dia da semana.
+2. Se `barberId` for informado, olha apenas a agenda daquele barbeiro; senão, agrega a agenda inteira do dono.
+3. Mescla agendamentos do banco (excluindo cancelados) com eventos ocupados do Google Calendar.
+4. Gera slots contíguos de `service.durationMin` minutos entre `startTime` e `endTime`; marca como indisponível qualquer slot que colida com um período ocupado ou já esteja no passado.

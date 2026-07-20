@@ -6,6 +6,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { OwnersModule } from './modules/owners/owners.module';
 import { ClientsModule } from './modules/clients/clients.module';
+import { UnitsModule } from './modules/units/units.module';
+import { BarbersModule } from './modules/barbers/barbers.module';
 import { ServicesModule } from './modules/services/services.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { FinancialModule } from './modules/financial/financial.module';
@@ -21,6 +23,8 @@ import { WhatsappModule } from './modules/integrations/whatsapp/whatsapp.module'
     AuthModule,
     OwnersModule,
     ClientsModule,
+    UnitsModule,
+    BarbersModule,
     ServicesModule,
     AppointmentsModule,
     FinancialModule,

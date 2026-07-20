@@ -32,6 +32,7 @@ export class AppointmentsService {
     const conflito = await this.prisma.appointment.findFirst({
       where: {
         ownerId: dto.ownerId,
+        ...(dto.barberId ? { barberId: dto.barberId } : {}),
         status: { notIn: ['CANCELLED'] },
         OR: [
           { startAt: { gte: startAt, lt: endAt } },
@@ -47,11 +48,13 @@ export class AppointmentsService {
         ownerId: dto.ownerId,
         clientId,
         serviceId: dto.serviceId,
+        unitId: dto.unitId,
+        barberId: dto.barberId,
         startAt,
         endAt,
         notes: dto.notes,
       },
-      include: { client: true, service: true, owner: true },
+      include: { client: true, service: true, owner: true, unit: true, barber: true },
     });
 
     if (appointment.owner.googleAccessToken && appointment.owner.googleRefreshToken) {

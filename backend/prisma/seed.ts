@@ -12,48 +12,75 @@ async function main() {
     where: { email: 'demo@barbearialuck.com' },
     update: {},
     create: {
-      name: 'Lucas Silva',
+      name: 'Diego Monteiro',
       email: 'demo@barbearialuck.com',
       passwordHash,
-      whatsapp: '5511999990000',
+      whatsapp: '5511998876655',
       barbershopName: 'Barbearia Luck',
-      barbershopAddress: 'Rua das Flores, 123 - Centro, São Paulo/SP',
+      barbershopAddress: 'R. Aspicuelta, 514 — V. Madalena, SP',
       monthlyGoal: 8000,
     },
   });
-
   console.log(`✓ Dono criado: ${owner.email} (senha: 123456)`);
 
-  const servicos = [
-    { name: 'Corte Social', price: 35.0, durationMin: 30, description: 'Corte clássico com tesoura' },
-    { name: 'Corte + Barba', price: 55.0, durationMin: 50, description: 'Combo completo' },
-    { name: 'Barba', price: 25.0, durationMin: 25, description: 'Aparar e modelar' },
-    { name: 'Pigmentação', price: 70.0, durationMin: 40, description: 'Coloração de cabelo ou barba' },
+  // Unidades
+  const unidadesConfig = [
+    { id: 'seed-unit-atlantica', name: 'Unidade Atlântica', address: 'Av. Atlântica, 1400', neighborhood: 'Copacabana, RJ' },
+    { id: 'seed-unit-bompastor', name: 'Unidade Bom Pastor', address: 'Av. Bom Pastor, 1250', neighborhood: 'Ipiranga, SP' },
   ];
-
-  for (const s of servicos) {
-    const id = `seed-${s.name.replace(/\s+/g, '-').toLowerCase()}`;
-    await prisma.service.upsert({
-      where: { id },
+  for (const u of unidadesConfig) {
+    await prisma.unit.upsert({
+      where: { id: u.id },
       update: {},
-      create: { id, ownerId: owner.id, ...s },
+      create: { ...u, ownerId: owner.id },
+    });
+  }
+  console.log(`✓ ${unidadesConfig.length} unidades criadas`);
+
+  // Barbeiros
+  const barbeirosConfig = [
+    { id: 'seed-barber-diego', name: 'Diego Monteiro', role: 'Barbeiro sênior', rating: 4.9, avatarLabel: 'DM', unitId: 'seed-unit-atlantica' },
+    { id: 'seed-barber-thiago', name: 'Thiago Alves', role: 'Barbeiro', rating: 4.8, avatarLabel: 'TA', unitId: 'seed-unit-atlantica' },
+    { id: 'seed-barber-otavio', name: 'Otávio Reis', role: 'Barbeiro júnior', rating: 4.7, avatarLabel: 'OR', unitId: 'seed-unit-bompastor' },
+  ];
+  for (const b of barbeirosConfig) {
+    await prisma.barber.upsert({
+      where: { id: b.id },
+      update: {},
+      create: { ...b, ownerId: owner.id },
+    });
+  }
+  console.log(`✓ ${barbeirosConfig.length} barbeiros criados`);
+
+  // Serviços
+  const servicos = [
+    { id: 'seed-svc-corte', name: 'Corte Masculino', price: 45, durationMin: 40, description: 'Tesoura + máquina, finalização' },
+    { id: 'seed-svc-barba', name: 'Barba Tradicional', price: 35, durationMin: 30, description: 'Toalha quente, navalha, bálsamo' },
+    { id: 'seed-svc-combo', name: 'Combo Premium', price: 75, durationMin: 75, description: 'Corte + Barba + Sobrancelha' },
+    { id: 'seed-svc-sobrancelha', name: 'Sobrancelha', price: 20, durationMin: 15, description: 'Design com navalha' },
+  ];
+  for (const s of servicos) {
+    await prisma.service.upsert({
+      where: { id: s.id },
+      update: {},
+      create: { ...s, ownerId: owner.id },
     });
   }
   console.log(`✓ ${servicos.length} serviços criados`);
 
+  // Horários
   const horarios = [
     { dayOfWeek: 0, startTime: '09:00', endTime: '17:00', active: false },
-    { dayOfWeek: 1, startTime: '09:00', endTime: '19:00', active: true },
-    { dayOfWeek: 2, startTime: '09:00', endTime: '19:00', active: true },
-    { dayOfWeek: 3, startTime: '09:00', endTime: '19:00', active: true },
-    { dayOfWeek: 4, startTime: '09:00', endTime: '19:00', active: true },
-    { dayOfWeek: 5, startTime: '09:00', endTime: '19:00', active: true },
+    { dayOfWeek: 1, startTime: '08:00', endTime: '20:00', active: true },
+    { dayOfWeek: 2, startTime: '08:00', endTime: '20:00', active: true },
+    { dayOfWeek: 3, startTime: '08:00', endTime: '20:00', active: true },
+    { dayOfWeek: 4, startTime: '08:00', endTime: '20:00', active: true },
+    { dayOfWeek: 5, startTime: '08:00', endTime: '20:00', active: true },
     { dayOfWeek: 6, startTime: '09:00', endTime: '17:00', active: true },
   ];
-
   await prisma.workingHours.deleteMany({ where: { ownerId: owner.id } });
   await prisma.workingHours.createMany({
-    data: horarios.map(h => ({ ...h, ownerId: owner.id })),
+    data: horarios.map((h) => ({ ...h, ownerId: owner.id })),
   });
   console.log('✓ Horários de funcionamento configurados');
 
@@ -65,5 +92,8 @@ async function main() {
 }
 
 main()
-  .catch((e) => { console.error(e); process.exit(1); })
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
   .finally(() => prisma.$disconnect());

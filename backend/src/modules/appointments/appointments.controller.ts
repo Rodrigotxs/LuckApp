@@ -22,8 +22,10 @@ export class AppointmentsController {
     @Query('ownerId') ownerId: string,
     @Query('date') date: string,
     @Query('serviceId') serviceId: string,
+    @Query('barberId') barberId?: string,
+    @Query('unitId') unitId?: string,
   ): Promise<Slot[]> {
-    return this.slotsService.calcularSlotsDisponiveis(ownerId, date, serviceId);
+    return this.slotsService.calcularSlotsDisponiveis(ownerId, date, serviceId, barberId, unitId);
   }
 
   @ApiBearerAuth()

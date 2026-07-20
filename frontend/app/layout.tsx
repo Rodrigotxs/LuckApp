@@ -3,7 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Barbearia Luck',
-  description: 'Sistema de agendamento da Barbearia Luck',
+  description: 'Tradição · Estilo · Precisão. Agendamento online.',
 };
 
 export const viewport: Viewport = {
@@ -15,8 +15,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className="h-full">
-      <body className="min-h-full bg-[#F5F5F5]">{children}</body>
+    <html lang="pt-BR">
+      <body>{children}</body>
     </html>
   );
 }
