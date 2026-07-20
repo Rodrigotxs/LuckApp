@@ -48,13 +48,23 @@ export function LuckLogin({ onBack, onEnter, onOwnerOtpSent, onClientOtpSent }: 
           onOwnerOtpSent?.(wa);
         }
       } else {
-        // Cliente sempre por OTP WhatsApp
-        const wa = whatsapp.replace(/\D/g, '');
-        if (wa.length < 11) { setErro('WhatsApp deve ter 11 dígitos'); return; }
-        await authService.sendClientOtp('Cliente Luck', wa);
-        sessionStorage.setItem('cadastro_whatsapp', wa);
-        sessionStorage.setItem('cadastro_nome', 'Cliente Luck');
-        onClientOtpSent?.();
+        // Cliente: OTP via WhatsApp OU e-mail (nunca senha)
+        if (method === 'whatsapp') {
+          const wa = whatsapp.replace(/\D/g, '');
+          if (wa.length < 11) { setErro('WhatsApp deve ter 11 dígitos'); return; }
+          await authService.sendClientOtp('Cliente Luck', wa);
+          sessionStorage.setItem('cadastro_whatsapp', wa);
+          sessionStorage.setItem('cadastro_nome', 'Cliente Luck');
+          sessionStorage.removeItem('cadastro_email');
+          onClientOtpSent?.();
+        } else {
+          if (!/^\S+@\S+\.\S+$/.test(email)) { setErro('E-mail inválido'); return; }
+          await authService.sendClientEmailOtp('Cliente Luck', email);
+          sessionStorage.setItem('cadastro_email', email);
+          sessionStorage.setItem('cadastro_nome', 'Cliente Luck');
+          sessionStorage.removeItem('cadastro_whatsapp');
+          onClientOtpSent?.();
+        }
       }
     } catch (err: any) {
       setErro(err.response?.data?.message || 'Erro ao entrar. Verifique seus dados.');
@@ -77,7 +87,9 @@ export function LuckLogin({ onBack, onEnter, onOwnerOtpSent, onClientOtpSent }: 
 
   const podeSubmit =
     role === 'client'
-      ? whatsapp.length >= 11
+      ? method === 'whatsapp'
+        ? whatsapp.replace(/\D/g, '').length >= 11
+        : email.length > 0
       : method === 'email'
         ? email.length > 0 && password.length > 0
         : whatsapp.replace(/\D/g, '').length >= 11;
@@ -104,35 +116,59 @@ export function LuckLogin({ onBack, onEnter, onOwnerOtpSent, onClientOtpSent }: 
           }}>FUNCIONÁRIO</button>
         </div>
 
-        {role === 'owner' && (
-          <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 10, padding: 4, marginBottom: 20 }}>
-            <button onClick={() => setMethod('email')} style={{
-              flex: 1, padding: '9px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-              background: method === 'email' ? roleColor : 'transparent', color: method === 'email' ? 'white' : '#888',
-              fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em',
-            }}>E-MAIL</button>
-            <button onClick={() => setMethod('whatsapp')} style={{
-              flex: 1, padding: '9px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-              background: method === 'whatsapp' ? roleColor : 'transparent', color: method === 'whatsapp' ? 'white' : '#888',
-              fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}>
-              <IconWhatsapp size={13} color={method === 'whatsapp' ? 'white' : '#888'} />WHATSAPP
-            </button>
-          </div>
-        )}
+        {/* Toggle de método visível para AMBOS os roles (igual ao design) */}
+        <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 10, padding: 4, marginBottom: 20 }}>
+          <button onClick={() => setMethod('email')} style={{
+            flex: 1, padding: '9px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+            background: method === 'email' ? roleColor : 'transparent', color: method === 'email' ? 'white' : '#888',
+            fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em',
+          }}>E-MAIL</button>
+          <button onClick={() => setMethod('whatsapp')} style={{
+            flex: 1, padding: '9px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+            background: method === 'whatsapp' ? roleColor : 'transparent', color: method === 'whatsapp' ? 'white' : '#888',
+            fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <IconWhatsapp size={13} color={method === 'whatsapp' ? 'white' : '#888'} />WHATSAPP
+          </button>
+        </div>
 
         <LuckSocialButtons />
 
-        {role === 'client' || method === 'whatsapp' ? (
-          <LuckField label="WhatsApp" value={whatsapp} onChange={setWhatsapp} editable state={whatsapp ? 'filled' : 'focus'} mono help="Enviaremos um código por WhatsApp" />
+        {method === 'whatsapp' ? (
+          <LuckField
+            label="WhatsApp"
+            value={whatsapp}
+            onChange={setWhatsapp}
+            editable
+            state={whatsapp ? 'filled' : 'focus'}
+            mono
+            help={role === 'client' ? 'Enviaremos um código por WhatsApp' : 'Você receberá um código por aqui'}
+          />
         ) : (
-          <>
-            <LuckField label="E-mail" value={email} onChange={setEmail} editable state={email ? 'filled' : 'focus'} />
-            <LuckField label="Senha" value={password} onChange={setPassword} editable type="password" state={password ? 'filled' : 'idle'} />
-          </>
+          <LuckField
+            label="E-mail"
+            value={email}
+            onChange={setEmail}
+            editable
+            state={email ? 'filled' : 'focus'}
+            help={role === 'client' ? 'Enviaremos um código por e-mail' : undefined}
+          />
         )}
 
-        {role === 'owner' && (
+        {/* Senha só existe para dono via e-mail */}
+        {role === 'owner' && method === 'email' && (
+          <LuckField
+            label="Senha"
+            value={password}
+            onChange={setPassword}
+            editable
+            type="password"
+            state={password ? 'filled' : 'idle'}
+          />
+        )}
+
+        {/* "Esqueci minha senha" só faz sentido para dono via e-mail */}
+        {role === 'owner' && method === 'email' && (
           <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6 }}>
             <button
               onClick={esqueciSenha}
@@ -173,7 +209,11 @@ export function LuckLogin({ onBack, onEnter, onOwnerOtpSent, onClientOtpSent }: 
           disabled={loading || !podeSubmit}
           icon={<IconArrow size={17} color="white" strokeWidth={2} />}
         >
-          {loading ? 'ENTRANDO…' : role === 'client' || method === 'whatsapp' ? 'ENVIAR CÓDIGO' : 'ENTRAR'}
+          {loading
+            ? 'ENTRANDO…'
+            : role === 'owner' && method === 'email'
+              ? 'ENTRAR'
+              : 'ENVIAR CÓDIGO'}
         </LuckCTA>
       </LuckFooter>
     </div>
