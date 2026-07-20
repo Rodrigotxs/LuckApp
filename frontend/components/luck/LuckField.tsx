@@ -25,7 +25,10 @@ const borderColorMap: Record<FieldState, string> = {
 };
 
 export function LuckField({ label, value, placeholder, state = 'idle', help, mono, editable, onChange, type = 'text' }: LuckFieldProps) {
-  const borderColor = borderColorMap[state];
+  // "success" e "filled" só fazem sentido se realmente houver valor.
+  // Sem valor, colapsa para "idle" — evita check verde em campo vazio.
+  const efetivo: FieldState = !value && (state === 'success' || state === 'filled') ? 'idle' : state;
+  const borderColor = borderColorMap[efetivo];
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -38,7 +41,7 @@ export function LuckField({ label, value, placeholder, state = 'idle', help, mon
       <div style={{
         background: 'var(--bg2)', border: `1.5px solid ${borderColor}`, borderRadius: 10,
         padding: '13px 14px', display: 'flex', alignItems: 'center', gap: 8,
-        boxShadow: state === 'focus' ? '0 0 0 3px var(--red-soft)' : 'none',
+        boxShadow: efetivo === 'focus' ? '0 0 0 3px var(--red-soft)' : 'none',
       }}>
         {editable ? (
           <input
@@ -58,7 +61,7 @@ export function LuckField({ label, value, placeholder, state = 'idle', help, mon
             flex: 1, fontSize: 14, color: value ? 'var(--ink)' : '#aaa', fontWeight: value ? 500 : 400,
           }}>
             {value || placeholder}
-            {state === 'focus' && (
+            {efetivo === 'focus' && (
               <span style={{
                 display: 'inline-block', width: 1.5, height: 15, background: 'var(--red)',
                 marginLeft: 1, marginBottom: -3, animation: 'lk-blink 1s step-end infinite',
@@ -66,10 +69,10 @@ export function LuckField({ label, value, placeholder, state = 'idle', help, mon
             )}
           </span>
         )}
-        {state === 'success' && <IconCheck size={16} color="#2e7d32" strokeWidth={2.5} />}
+        {efetivo === 'success' && <IconCheck size={16} color="#2e7d32" strokeWidth={2.5} />}
       </div>
       {help && (
-        <div style={{ fontSize: 10.5, marginTop: 6, color: state === 'error' ? 'var(--red)' : '#999' }}>
+        <div style={{ fontSize: 10.5, marginTop: 6, color: efetivo === 'error' ? 'var(--red)' : '#999' }}>
           {help}
         </div>
       )}
