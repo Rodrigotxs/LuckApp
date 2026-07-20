@@ -1,10 +1,10 @@
-import { IsDateString, IsOptional, IsString, IsEnum } from 'class-validator';
+import { IsDateString, IsOptional, IsString, IsIn, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
-import { RescheduleStatus } from '@prisma/client';
 
 export class CreateRescheduleDto {
   @ApiProperty({ example: 'appointment-uuid' })
   @IsString()
+  @IsNotEmpty()
   appointmentId: string;
 
   @ApiProperty({ example: '2024-04-30T14:30:00.000Z' })
@@ -19,6 +19,6 @@ export class CreateRescheduleDto {
 
 export class UpdateRescheduleDto {
   @ApiProperty({ enum: ['APPROVED', 'REJECTED'] })
-  @IsEnum(RescheduleStatus)
-  status: RescheduleStatus;
+  @IsIn(['APPROVED', 'REJECTED'], { message: 'Status deve ser APPROVED ou REJECTED' })
+  status: 'APPROVED' | 'REJECTED';
 }

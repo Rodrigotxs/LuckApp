@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateOwnerDto } from './dto/update-owner.dto';
 
@@ -33,6 +33,18 @@ export class OwnersService {
   }
 
   async update(id: string, dto: UpdateOwnerDto) {
+    if (dto.email) {
+      const outro = await this.prisma.owner.findFirst({
+        where: { email: dto.email, id: { not: id } },
+      });
+      if (outro) throw new ConflictException('Este e-mail já está em uso');
+    }
+    if (dto.whatsapp) {
+      const outro = await this.prisma.owner.findFirst({
+        where: { whatsapp: dto.whatsapp, id: { not: id } },
+      });
+      if (outro) throw new ConflictException('Este WhatsApp já está em uso');
+    }
     const owner = await this.prisma.owner.update({ where: { id }, data: dto });
     const {
       passwordHash, googleAccessToken, googleRefreshToken,

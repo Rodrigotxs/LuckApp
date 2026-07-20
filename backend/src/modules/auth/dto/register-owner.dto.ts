@@ -1,9 +1,11 @@
-import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional, IsNotEmpty, MaxLength, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class RegisterOwnerDto {
   @ApiProperty({ example: 'João Silva' })
   @IsString()
+  @IsNotEmpty({ message: 'Nome é obrigatório' })
+  @MaxLength(100)
   name: string;
 
   @ApiProperty({ example: 'joao@email.com' })
@@ -17,10 +19,14 @@ export class RegisterOwnerDto {
 
   @ApiProperty({ example: '5511999999999' })
   @IsString()
+  @IsNotEmpty({ message: 'WhatsApp é obrigatório' })
+  @Matches(/^\d{10,15}$/, { message: 'WhatsApp deve conter apenas dígitos (10-15)' })
   whatsapp: string;
 
   @ApiProperty({ example: 'Barbearia Luck' })
   @IsString()
+  @IsNotEmpty({ message: 'Nome da barbearia é obrigatório' })
+  @MaxLength(100)
   barbershopName: string;
 
   @ApiProperty({ example: 'Rua das Flores, 123', required: false })

@@ -14,6 +14,7 @@ export class LoginClientDto {
 
   @ApiProperty({ example: '123456' })
   @IsString()
+  @MinLength(6, { message: 'Senha deve ter no mínimo 6 caracteres' })
   password: string;
 }
 

@@ -1,10 +1,17 @@
-import { Controller, Get, Patch, Query, Body, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Patch, Query, Body, Res, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { IsNumber, Min } from 'class-validator';
 import { Response } from 'express';
 import { FinancialService } from './financial.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/;
+function assertDate(value: string, name: string) {
+  if (!value || !ISO_DATE.test(value)) {
+    throw new BadRequestException(`${name} inválida (formato esperado: YYYY-MM-DD)`);
+  }
+}
 
 class UpdateGoalDto {
   @IsNumber()
@@ -42,6 +49,8 @@ export class FinancialController {
     @Query('serviceId') serviceId?: string,
     @Query('paymentMethod') paymentMethod?: PaymentMethodFilter,
   ) {
+    assertDate(startDate, 'startDate');
+    assertDate(endDate, 'endDate');
     return this.financialService.relatorio(user.id, startDate, endDate, serviceId, paymentMethod);
   }
 
@@ -55,6 +64,8 @@ export class FinancialController {
     @Query('paymentMethod') paymentMethod: PaymentMethodFilter,
     @Res() res: Response,
   ) {
+    assertDate(startDate, 'startDate');
+    assertDate(endDate, 'endDate');
     const csv = await this.financialService.exportarCSV(user.id, startDate, endDate, serviceId, paymentMethod);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="relatorio-barbearia-luck.csv"`);

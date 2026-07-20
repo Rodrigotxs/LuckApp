@@ -7,6 +7,18 @@ import { parseISO, startOfDay, endOfDay } from 'date-fns';
 export class AvailabilityService {
   constructor(private prisma: PrismaService) {}
 
+  /** Garante que barberId/unitId (quando informados) pertencem ao dono. */
+  private async validarPropriedade(ownerId: string, barberId?: string, unitId?: string) {
+    if (barberId) {
+      const b = await this.prisma.barber.findFirst({ where: { id: barberId, ownerId } });
+      if (!b) throw new NotFoundException('Barbeiro não encontrado nesta barbearia');
+    }
+    if (unitId) {
+      const u = await this.prisma.unit.findFirst({ where: { id: unitId, ownerId } });
+      if (!u) throw new NotFoundException('Unidade não encontrada nesta barbearia');
+    }
+  }
+
   async listar(ownerId: string, from?: string, to?: string, barberId?: string) {
     const where: any = { ownerId };
     if (from || to) {
@@ -23,6 +35,7 @@ export class AvailabilityService {
   }
 
   async criar(ownerId: string, dto: CreateAvailabilityBlockDto) {
+    await this.validarPropriedade(ownerId, dto.barberId, dto.unitId);
     return this.prisma.availabilityBlock.create({
       data: {
         ownerId,
@@ -37,6 +50,7 @@ export class AvailabilityService {
   }
 
   async bloquearDia(ownerId: string, dto: BlockDayDto) {
+    await this.validarPropriedade(ownerId, dto.barberId);
     const day = parseISO(dto.date);
     return this.prisma.availabilityBlock.create({
       data: {
@@ -51,6 +65,7 @@ export class AvailabilityService {
   }
 
   async bloquearSlot(ownerId: string, dto: BlockSlotDto) {
+    await this.validarPropriedade(ownerId, dto.barberId);
     return this.prisma.availabilityBlock.create({
       data: {
         ownerId,

@@ -32,7 +32,9 @@ export class SlotsService {
     barberId?: string,
     unitId?: string,
   ): Promise<Slot[]> {
-    const data = parseISO(date);
+    // Aceita 'YYYY-MM-DD' e trata como local (não UTC) — evita bug de dia da semana em fuso -3
+    const [ano, mes, dia] = date.slice(0, 10).split('-').map(Number);
+    const data = new Date(ano, (mes || 1) - 1, dia || 1);
     const diaSemana = data.getDay();
 
     const service = await this.prisma.service.findUnique({ where: { id: serviceId } });

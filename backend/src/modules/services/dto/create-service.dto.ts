@@ -1,9 +1,11 @@
-import { IsString, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, IsNotEmpty, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateServiceDto {
   @ApiProperty({ example: 'Corte Social' })
   @IsString()
+  @IsNotEmpty({ message: 'Nome é obrigatório' })
+  @MaxLength(80)
   name: string;
 
   @ApiProperty({ example: 35.0 })
@@ -19,5 +21,6 @@ export class CreateServiceDto {
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
+  @MaxLength(200)
   description?: string;
 }

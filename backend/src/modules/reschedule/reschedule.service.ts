@@ -90,6 +90,9 @@ export class RescheduleService {
 
     // Aprovado → move o agendamento para o novo horário
     if (dto.status === 'APPROVED') {
+      if (request.requestedStart.getTime() < Date.now() - 60 * 1000) {
+        throw new BadRequestException('Não é possível aprovar remarcação para horário no passado');
+      }
       const newEnd = addMinutes(request.requestedStart, request.appointment.service.durationMin);
 
       // Verifica conflito no novo horário

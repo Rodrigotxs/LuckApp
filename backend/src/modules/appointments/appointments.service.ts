@@ -25,12 +25,43 @@ export class AppointmentsService {
   async criar(callerId: string, dto: CreateAppointmentDto, callerRole?: 'client' | 'owner') {
     // Se dono criando em nome de outro cliente, usa dto.clientId; senão o próprio caller
     const clientId = callerRole === 'owner' && dto.clientId ? dto.clientId : callerId;
+
+    // Dono agendando para outro cliente: valida que esse cliente existe
+    if (callerRole === 'owner' && dto.clientId) {
+      const cliente = await this.prisma.client.findUnique({ where: { id: dto.clientId } });
+      if (!cliente) throw new NotFoundException('Cliente não encontrado');
+    }
+
+    // Dono agendando: o ownerId no dto tem que ser o próprio
+    if (callerRole === 'owner' && dto.ownerId !== callerId) {
+      throw new ForbiddenException('Não é possível agendar em outra barbearia');
+    }
+
     const service = await this.prisma.service.findFirst({
       where: { id: dto.serviceId, ownerId: dto.ownerId, active: true },
     });
     if (!service) throw new NotFoundException('Serviço não encontrado');
 
+    // barberId (se informado) tem que pertencer ao mesmo dono
+    if (dto.barberId) {
+      const barber = await this.prisma.barber.findFirst({
+        where: { id: dto.barberId, ownerId: dto.ownerId },
+      });
+      if (!barber) throw new NotFoundException('Barbeiro não encontrado nesta barbearia');
+    }
+    // unitId (se informado) tem que pertencer ao mesmo dono
+    if (dto.unitId) {
+      const unit = await this.prisma.unit.findFirst({
+        where: { id: dto.unitId, ownerId: dto.ownerId },
+      });
+      if (!unit) throw new NotFoundException('Unidade não encontrada nesta barbearia');
+    }
+
     const startAt = parseISO(dto.startAt);
+    // Não permitir agendamento no passado (margem de 1 min)
+    if (startAt.getTime() < Date.now() - 60 * 1000) {
+      throw new BadRequestException('Horário no passado');
+    }
     const endAt = addMinutes(startAt, service.durationMin);
 
     const conflito = await this.prisma.appointment.findFirst({

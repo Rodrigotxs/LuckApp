@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { LuckHeader, LuckField, LuckCTA, LuckFooter } from '../luck';
 import { IconCalendar, IconCheck, IconEdit, IconPlus } from '../icons/Icons';
 import { LUCK_UNITS } from './data';
-import { clientService, ownerService } from '@/lib/services';
+import { clientService, ownerService, authService } from '@/lib/services';
 
 interface Props {
   role: 'client' | 'owner';
@@ -23,6 +23,9 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
   const [whatsapp, setWhatsapp] = useState('');
   const [email, setEmail] = useState('');
   const [establishment, setEstablishment] = useState('Barbearia Luck');
+  const [endereco, setEndereco] = useState('');
+  const [cep, setCep] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
   const [unitId, setUnitId] = useState('atlantica');
   const [unitOpen, setUnitOpen] = useState(false);
   const color = isOwner ? 'var(--navy)' : 'var(--red)';
@@ -37,6 +40,8 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
           setWhatsapp(owner.whatsapp);
           setEmail(owner.email);
           setEstablishment(owner.barbershopName);
+          setEndereco(owner.barbershopAddress || '');
+          setCep(owner.zipCode || '');
         } else {
           const client = await clientService.getMe();
           setName(client.name);
@@ -54,13 +59,26 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
 
   const salvar = async () => {
     setErro('');
+    if (novaSenha && novaSenha.length < 6) {
+      setErro('Nova senha deve ter no mínimo 6 caracteres');
+      return;
+    }
     setLoading(true);
     try {
       if (isOwner) {
-        await ownerService.updateMe({ name, whatsapp, email, barbershopName: establishment });
+        await ownerService.updateMe({
+          name, whatsapp, email,
+          barbershopName: establishment,
+          barbershopAddress: endereco || undefined,
+          zipCode: cep || undefined,
+        });
       } else {
         await clientService.updateMe({ name, whatsapp, email });
+        if (novaSenha) {
+          await authService.setClientPassword(novaSenha);
+        }
       }
+      setNovaSenha('');
       setEditing(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -141,7 +159,11 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
         <LuckField label="E-mail" value={email} editable={editing} onChange={setEmail} state={editing ? 'filled' : 'success'} />
 
         {isOwner && (
-          <LuckField label="Nome do estabelecimento" value={establishment} editable={editing} onChange={setEstablishment} state={editing ? 'filled' : 'success'} />
+          <>
+            <LuckField label="Nome do estabelecimento" value={establishment} editable={editing} onChange={setEstablishment} state={editing ? 'filled' : 'success'} />
+            <LuckField label="Endereço" value={endereco} editable={editing} onChange={setEndereco} state={editing ? 'filled' : 'success'} />
+            <LuckField label="CEP" value={cep} editable={editing} onChange={setCep} state={editing ? 'filled' : 'success'} mono />
+          </>
         )}
 
         {isOwner && (
@@ -202,7 +224,16 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
         )}
 
         {editing && (
-          <LuckField label="Nova senha" placeholder="Deixe em branco para não alterar" state="idle" />
+          <LuckField
+            label="Nova senha"
+            placeholder="Deixe em branco para não alterar"
+            value={novaSenha}
+            editable
+            type="password"
+            onChange={setNovaSenha}
+            state={novaSenha ? 'filled' : 'idle'}
+            help={isOwner ? 'Alteração de senha do dono via "Esqueci minha senha" no login.' : 'Mín. 6 caracteres. Deixe em branco para manter a atual.'}
+          />
         )}
 
         {erro && (

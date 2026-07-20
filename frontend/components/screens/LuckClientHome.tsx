@@ -56,6 +56,10 @@ export function LuckClientHome({ onBookNew, onLogout, onProfile, onReschedule, h
 
   const cancelar = async () => {
     if (!proximo) return;
+    const ok = typeof window !== 'undefined'
+      ? window.confirm('Tem certeza que deseja cancelar este agendamento?')
+      : true;
+    if (!ok) return;
     try {
       await appointmentsService.cancel(proximo.id);
       setStatus('CANCELLED');

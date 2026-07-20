@@ -1,13 +1,16 @@
-import { IsString, IsOptional, IsBoolean, IsNumber, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsNumber, Min, Max, IsNotEmpty, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateBarberDto {
   @ApiProperty({ example: 'Diego Monteiro' })
   @IsString()
+  @IsNotEmpty({ message: 'Nome é obrigatório' })
+  @MaxLength(80)
   name: string;
 
   @ApiProperty({ example: 'uuid da unidade' })
   @IsString()
+  @IsNotEmpty({ message: 'unitId é obrigatório' })
   unitId: string;
 
   @ApiProperty({ example: 'Barbeiro sênior', required: false })

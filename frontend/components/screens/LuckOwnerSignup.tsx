@@ -5,6 +5,8 @@ import { LuckHeader, LuckProgress, LuckField, LuckCTA, LuckFooter, LuckSocialBut
 import { IconArrow, IconCheck, IconWhatsapp } from '../icons/Icons';
 import { LUCK_UNITS } from './data';
 import { api } from '@/lib/api';
+import { unitsService } from '@/lib/services';
+import { useEffect } from 'react';
 
 interface Props {
   onBack: () => void;
@@ -24,6 +26,19 @@ export function LuckOwnerSignup({ onBack, onNext, selectedUnitId, setSelectedUni
   const [cep, setCep] = useState('');
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const [unidades, setUnidades] = useState(LUCK_UNITS as Array<{ id: string; name: string; address: string }>);
+
+  // Buscar unidades reais (com UUIDs) — se o backend estiver rodando
+  useEffect(() => {
+    // Tenta listar via owner default para ter contexto — mas Units.list requer auth.
+    // Usamos GET público sob o dono default.
+    import('@/lib/services').then(({ ownerService, unitsService }) =>
+      ownerService.getDefaultPublic()
+        .then((o) => o ? unitsService.listPublic(o.id) : null)
+        .then((u) => { if (u && u.length) setUnidades(u); })
+        .catch(() => {})
+    );
+  }, []);
 
   const submit = async () => {
     setErro('');
@@ -100,7 +115,7 @@ export function LuckOwnerSignup({ onBack, onNext, selectedUnitId, setSelectedUni
 
         <div style={{ fontSize: 11, color: '#888', letterSpacing: '0.08em', fontWeight: 600, margin: '16px 0 8px' }}>UNIDADE VINCULADA</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {LUCK_UNITS.map((u) => {
+          {unidades.map((u) => {
             const sel = selectedUnitId === u.id;
             return (
               <button
