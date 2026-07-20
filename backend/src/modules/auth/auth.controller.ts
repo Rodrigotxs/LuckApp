@@ -5,6 +5,8 @@ import { RegisterOwnerDto } from './dto/register-owner.dto';
 import { LoginOwnerDto } from './dto/login-owner.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { SendOwnerOtpDto, VerifyOwnerOtpDto } from './dto/owner-otp.dto';
+import { RequestPasswordResetDto, ConfirmPasswordResetDto } from './dto/password-reset.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -44,6 +46,34 @@ export class AuthController {
   @ApiOperation({ summary: 'Valida OTP e retorna JWT do cliente' })
   verificarOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verificarOtp(dto);
+  }
+
+  @Public()
+  @Post('owner/send-otp')
+  @ApiOperation({ summary: 'Envia OTP via WhatsApp para o dono (login sem senha)' })
+  enviarOtpOwner(@Body() dto: SendOwnerOtpDto) {
+    return this.authService.enviarOtpOwner(dto);
+  }
+
+  @Public()
+  @Post('owner/verify-otp')
+  @ApiOperation({ summary: 'Valida OTP do dono e retorna JWT' })
+  verificarOtpOwner(@Body() dto: VerifyOwnerOtpDto) {
+    return this.authService.verificarOtpOwner(dto);
+  }
+
+  @Public()
+  @Post('owner/password-reset/request')
+  @ApiOperation({ summary: 'Solicita link de reset de senha (por email ou WhatsApp)' })
+  solicitarResetSenha(@Body() dto: RequestPasswordResetDto) {
+    return this.authService.solicitarResetSenha(dto);
+  }
+
+  @Public()
+  @Post('owner/password-reset/confirm')
+  @ApiOperation({ summary: 'Confirma nova senha usando token' })
+  confirmarResetSenha(@Body() dto: ConfirmPasswordResetDto) {
+    return this.authService.confirmarResetSenha(dto);
   }
 
   @UseGuards(JwtAuthGuard)

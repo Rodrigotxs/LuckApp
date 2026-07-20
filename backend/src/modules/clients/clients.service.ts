@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { UpdateClientDto } from './dto/update-client.dto';
 
 @Injectable()
 export class ClientsService {
@@ -8,7 +9,22 @@ export class ClientsService {
   async findById(id: string) {
     const client = await this.prisma.client.findUnique({ where: { id } });
     if (!client) throw new NotFoundException('Cliente não encontrado');
-    return client;
+    // Não expõe campos sensíveis
+    const { otpCode, otpExpiresAt, emailOtpCode, emailOtpExpiresAt, passwordResetToken, passwordResetExpires, ...safe } = client;
+    return safe;
+  }
+
+  async atualizar(id: string, dto: UpdateClientDto) {
+    // Se trocando WhatsApp, garante unicidade
+    if (dto.whatsapp) {
+      const outro = await this.prisma.client.findFirst({
+        where: { whatsapp: dto.whatsapp, id: { not: id } },
+      });
+      if (outro) throw new ConflictException('Este WhatsApp já está em uso');
+    }
+    const client = await this.prisma.client.update({ where: { id }, data: dto });
+    const { otpCode, otpExpiresAt, emailOtpCode, emailOtpExpiresAt, passwordResetToken, passwordResetExpires, ...safe } = client;
+    return safe;
   }
 
   async listarClientes(ownerId: string) {

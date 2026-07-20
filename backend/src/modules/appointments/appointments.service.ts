@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 import { WhatsappService } from '../integrations/whatsapp/whatsapp.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateStatusDto, UpdatePaymentDto } from './dto/update-appointment.dto';
 import { addMinutes, parseISO, startOfDay, endOfDay, format } from 'date-fns';
@@ -18,6 +19,7 @@ export class AppointmentsService {
     private prisma: PrismaService,
     private googleCalendar: GoogleCalendarService,
     private whatsapp: WhatsappService,
+    private loyalty: LoyaltyService,
   ) {}
 
   async criar(clientId: string, dto: CreateAppointmentDto) {
@@ -120,19 +122,23 @@ export class AppointmentsService {
 
   async atualizarStatus(ownerId: string, id: string, dto: UpdateStatusDto) {
     await this.verificarPropriedadeOwner(ownerId, id);
-    return this.prisma.appointment.update({
+    const updated = await this.prisma.appointment.update({
       where: { id },
       data: { status: dto.status },
       include: { client: true, service: true },
     });
+    await this.loyalty.concederPontos(id);
+    return updated;
   }
 
   async atualizarPagamento(ownerId: string, id: string, dto: UpdatePaymentDto) {
     await this.verificarPropriedadeOwner(ownerId, id);
-    return this.prisma.appointment.update({
+    const updated = await this.prisma.appointment.update({
       where: { id },
       data: { paymentStatus: dto.paymentStatus, paymentMethod: dto.paymentMethod },
     });
+    await this.loyalty.concederPontos(id);
+    return updated;
   }
 
   async cancelar(id: string, userId: string, role: string) {

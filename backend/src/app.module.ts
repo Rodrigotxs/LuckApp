@@ -10,6 +10,9 @@ import { UnitsModule } from './modules/units/units.module';
 import { BarbersModule } from './modules/barbers/barbers.module';
 import { ServicesModule } from './modules/services/services.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
+import { AvailabilityModule } from './modules/availability/availability.module';
+import { RescheduleModule } from './modules/reschedule/reschedule.module';
+import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { FinancialModule } from './modules/financial/financial.module';
 import { GoogleCalendarModule } from './modules/integrations/google-calendar/google-calendar.module';
 import { WhatsappModule } from './modules/integrations/whatsapp/whatsapp.module';
@@ -27,6 +30,9 @@ import { WhatsappModule } from './modules/integrations/whatsapp/whatsapp.module'
     BarbersModule,
     ServicesModule,
     AppointmentsModule,
+    AvailabilityModule,
+    RescheduleModule,
+    LoyaltyModule,
     FinancialModule,
     GoogleCalendarModule,
     WhatsappModule,

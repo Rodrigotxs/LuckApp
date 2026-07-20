@@ -8,72 +8,91 @@ datasource db {
 }
 
 model Owner {
-  id                   String         @id @default(uuid())
+  id                   String              @id @default(uuid())
   name                 String
-  email                String         @unique
+  email                String              @unique
   passwordHash         String
   whatsapp             String
   barbershopName       String
   barbershopAddress    String?
+  zipCode              String?
   logoUrl              String?
   googleAccessToken    String?
   googleRefreshToken   String?
   googleTokenExpiresAt DateTime?
   monthlyGoal          Float?
+  // OTP para login/registro via WhatsApp (paridade com cliente)
+  otpCode              String?
+  otpExpiresAt         DateTime?
+  // Reset de senha
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
   units                Unit[]
   barbers              Barber[]
   services             Service[]
   appointments         Appointment[]
   workingHours         WorkingHours[]
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
+  availabilityBlocks   AvailabilityBlock[]
+  rescheduleRequests   RescheduleRequest[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 }
 
 model Unit {
-  id           String        @id @default(uuid())
-  ownerId      String
-  owner        Owner         @relation(fields: [ownerId], references: [id])
-  name         String
-  address      String
-  neighborhood String?
-  active       Boolean       @default(true)
-  barbers      Barber[]
-  appointments Appointment[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String              @id @default(uuid())
+  ownerId            String
+  owner              Owner               @relation(fields: [ownerId], references: [id])
+  name               String
+  address            String
+  neighborhood       String?
+  active             Boolean             @default(true)
+  barbers            Barber[]
+  appointments       Appointment[]
+  availabilityBlocks AvailabilityBlock[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([ownerId])
 }
 
 model Barber {
-  id           String        @id @default(uuid())
-  ownerId      String
-  owner        Owner         @relation(fields: [ownerId], references: [id])
-  unitId       String
-  unit         Unit          @relation(fields: [unitId], references: [id])
-  name         String
-  role         String        @default("Barbeiro")
-  rating       Float         @default(5.0)
-  avatarLabel  String?
-  active       Boolean       @default(true)
-  appointments Appointment[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String              @id @default(uuid())
+  ownerId            String
+  owner              Owner               @relation(fields: [ownerId], references: [id])
+  unitId             String
+  unit               Unit                @relation(fields: [unitId], references: [id])
+  name               String
+  role               String              @default("Barbeiro")
+  rating             Float               @default(5.0)
+  avatarLabel        String?
+  active             Boolean             @default(true)
+  appointments       Appointment[]
+  availabilityBlocks AvailabilityBlock[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([ownerId])
   @@index([unitId])
 }
 
 model Client {
-  id           String        @id @default(uuid())
-  name         String
-  whatsapp     String        @unique
-  email        String?
-  otpCode      String?
-  otpExpiresAt DateTime?
-  appointments Appointment[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                   String              @id @default(uuid())
+  name                 String
+  whatsapp             String              @unique
+  email                String?
+  otpCode              String?
+  otpExpiresAt         DateTime?
+  // OTP separado por e-mail (permite mudar canal)
+  emailOtpCode         String?
+  emailOtpExpiresAt    DateTime?
+  // Reset de senha (fallback; cliente normalmente usa OTP)
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  loyaltyPoints        Int                 @default(0)
+  appointments         Appointment[]
+  rescheduleRequests   RescheduleRequest[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 }
 
 model Service {
@@ -91,26 +110,28 @@ model Service {
 }
 
 model Appointment {
-  id            String            @id @default(uuid())
-  ownerId       String
-  owner         Owner             @relation(fields: [ownerId], references: [id])
-  unitId        String?
-  unit          Unit?             @relation(fields: [unitId], references: [id])
-  barberId      String?
-  barber        Barber?           @relation(fields: [barberId], references: [id])
-  clientId      String
-  client        Client            @relation(fields: [clientId], references: [id])
-  serviceId     String
-  service       Service           @relation("ServiceAppointments", fields: [serviceId], references: [id])
-  startAt       DateTime
-  endAt         DateTime
-  status        AppointmentStatus @default(SCHEDULED)
-  googleEventId String?
-  paymentStatus PaymentStatus     @default(PENDING)
-  paymentMethod PaymentMethod?
-  notes         String?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id                 String              @id @default(uuid())
+  ownerId            String
+  owner              Owner               @relation(fields: [ownerId], references: [id])
+  unitId             String?
+  unit               Unit?               @relation(fields: [unitId], references: [id])
+  barberId           String?
+  barber             Barber?             @relation(fields: [barberId], references: [id])
+  clientId           String
+  client             Client              @relation(fields: [clientId], references: [id])
+  serviceId          String
+  service            Service             @relation("ServiceAppointments", fields: [serviceId], references: [id])
+  startAt            DateTime
+  endAt              DateTime
+  status             AppointmentStatus   @default(SCHEDULED)
+  googleEventId      String?
+  paymentStatus      PaymentStatus       @default(PENDING)
+  paymentMethod      PaymentMethod?
+  notes              String?
+  loyaltyPointsGiven Boolean             @default(false)
+  rescheduleRequests RescheduleRequest[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 
   @@index([ownerId, startAt])
   @@index([barberId, startAt])
@@ -127,6 +148,47 @@ model WorkingHours {
   active    Boolean @default(true)
 
   @@index([ownerId, dayOfWeek])
+}
+
+// Bloqueios granulares de agenda: dia inteiro ou intervalo específico.
+// barberId opcional — se nulo, aplica a toda a agenda do dono naquela unidade.
+model AvailabilityBlock {
+  id        String   @id @default(uuid())
+  ownerId   String
+  owner     Owner    @relation(fields: [ownerId], references: [id])
+  barberId  String?
+  barber    Barber?  @relation(fields: [barberId], references: [id])
+  unitId    String?
+  unit      Unit?    @relation(fields: [unitId], references: [id])
+  startAt   DateTime
+  endAt     DateTime
+  fullDay   Boolean  @default(false)
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, startAt])
+  @@index([barberId, startAt])
+}
+
+// Pedido de reagendamento (cliente propõe → dono aprova/recusa).
+model RescheduleRequest {
+  id             String           @id @default(uuid())
+  appointmentId  String
+  appointment    Appointment      @relation(fields: [appointmentId], references: [id])
+  clientId       String
+  client         Client           @relation(fields: [clientId], references: [id])
+  ownerId        String
+  owner          Owner            @relation(fields: [ownerId], references: [id])
+  requestedStart DateTime
+  status         RescheduleStatus @default(PENDING)
+  respondedAt    DateTime?
+  message        String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([appointmentId])
+  @@index([ownerId, status])
 }
 
 enum AppointmentStatus {
@@ -146,4 +208,11 @@ enum PaymentMethod {
   CASH
   PIX
   CARD
+}
+
+enum RescheduleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED_BY_CLIENT
 }

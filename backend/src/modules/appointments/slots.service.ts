@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WorkingHoursService } from '../services/working-hours.service';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
+import { AvailabilityService } from '../availability/availability.service';
 import { addMinutes, parseISO, startOfDay, endOfDay } from 'date-fns';
 
 export interface Slot {
@@ -21,6 +22,7 @@ export class SlotsService {
     private prisma: PrismaService,
     private workingHours: WorkingHoursService,
     private googleCalendar: GoogleCalendarService,
+    private availability: AvailabilityService,
   ) {}
 
   async calcularSlotsDisponiveis(
@@ -71,6 +73,15 @@ export class SlotsService {
         // Google Calendar não configurado ou erro
       }
     }
+
+    // Bloqueios manuais de agenda (dia inteiro ou slots)
+    const bloqueios = await this.availability.obterPeriodosBloqueados(
+      ownerId,
+      startOfDay(data),
+      endOfDay(data),
+      barberId,
+    );
+    periodosOcupados.push(...bloqueios);
 
     const slots: Slot[] = [];
     const [horaInicio, minInicio] = horario.startTime.split(':').map(Number);

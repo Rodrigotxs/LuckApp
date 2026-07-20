@@ -12,6 +12,9 @@ import { RegisterOwnerDto } from './dto/register-owner.dto';
 import { LoginOwnerDto } from './dto/login-owner.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { SendOwnerOtpDto, VerifyOwnerOtpDto } from './dto/owner-otp.dto';
+import { RequestPasswordResetDto, ConfirmPasswordResetDto } from './dto/password-reset.dto';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AuthService {
@@ -90,6 +93,96 @@ export class AuthService {
     return { token, client: { id: client.id, name: client.name, whatsapp: client.whatsapp } };
   }
 
+  // ─── OTP do dono (login via WhatsApp) ─────────────────────────────
+  async enviarOtpOwner(dto: SendOwnerOtpDto) {
+    const owner = await this.prisma.owner.findFirst({ where: { whatsapp: dto.whatsapp } });
+    if (!owner) throw new BadRequestException('Nenhuma conta encontrada com este WhatsApp');
+
+    const codigo = this.gerarCodigoOtp();
+    const expiracao = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.owner.update({
+      where: { id: owner.id },
+      data: { otpCode: codigo, otpExpiresAt: expiracao },
+    });
+    await this.whatsapp.enviarOtp(owner.whatsapp, codigo);
+
+    return { message: 'Código OTP enviado ao seu WhatsApp' };
+  }
+
+  async verificarOtpOwner(dto: VerifyOwnerOtpDto) {
+    const owner = await this.prisma.owner.findFirst({ where: { whatsapp: dto.whatsapp } });
+    if (!owner || !owner.otpCode) throw new BadRequestException('Código inválido ou expirado');
+    if (owner.otpCode !== dto.code) throw new BadRequestException('Código OTP incorreto');
+    if (owner.otpExpiresAt && owner.otpExpiresAt < new Date()) {
+      throw new BadRequestException('Código expirado. Solicite um novo.');
+    }
+
+    await this.prisma.owner.update({
+      where: { id: owner.id },
+      data: { otpCode: null, otpExpiresAt: null },
+    });
+
+    const token = this.gerarToken(owner.id, 'owner');
+    return { token, owner: this.sanitizarOwner(owner) };
+  }
+
+  // ─── Reset de senha (owner) ───────────────────────────────────────
+  async solicitarResetSenha(dto: RequestPasswordResetDto) {
+    if (!dto.email && !dto.whatsapp) {
+      throw new BadRequestException('Informe email ou whatsapp');
+    }
+    const owner = await this.prisma.owner.findFirst({
+      where: {
+        OR: [
+          ...(dto.email ? [{ email: dto.email }] : []),
+          ...(dto.whatsapp ? [{ whatsapp: dto.whatsapp }] : []),
+        ],
+      },
+    });
+
+    // Sempre retorna sucesso para não vazar existência de conta
+    if (!owner) return { message: 'Se a conta existir, você receberá um link em breve.' };
+
+    const token = crypto.randomBytes(24).toString('hex');
+    const expira = new Date(Date.now() + 60 * 60 * 1000); // 1 h
+
+    await this.prisma.owner.update({
+      where: { id: owner.id },
+      data: { passwordResetToken: token, passwordResetExpires: expira },
+    });
+
+    // Envia via WhatsApp (fluxo do design)
+    try {
+      const linkBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+      await this.whatsapp.notificar(
+        owner.whatsapp,
+        `🔐 *Redefinir senha — Barbearia Luck*\n\n` +
+          `Toque no link abaixo para escolher uma nova senha (válido por 1 h):\n${linkBase}/reset?token=${token}`,
+      );
+    } catch {}
+
+    return { message: 'Se a conta existir, você receberá um link em breve.' };
+  }
+
+  async confirmarResetSenha(dto: ConfirmPasswordResetDto) {
+    const owner = await this.prisma.owner.findFirst({
+      where: {
+        passwordResetToken: dto.token,
+        passwordResetExpires: { gt: new Date() },
+      },
+    });
+    if (!owner) throw new BadRequestException('Token inválido ou expirado');
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.prisma.owner.update({
+      where: { id: owner.id },
+      data: { passwordHash, passwordResetToken: null, passwordResetExpires: null },
+    });
+
+    return { message: 'Senha atualizada com sucesso' };
+  }
+
   private gerarToken(sub: string, role: 'owner' | 'client') {
     return this.jwtService.sign({ sub, role });
   }
@@ -99,7 +192,7 @@ export class AuthService {
   }
 
   private sanitizarOwner(owner: any) {
-    const { passwordHash, googleAccessToken, googleRefreshToken, ...safe } = owner;
+    const { passwordHash, googleAccessToken, googleRefreshToken, otpCode, otpExpiresAt, passwordResetToken, passwordResetExpires, ...safe } = owner;
     return safe;
   }
 }

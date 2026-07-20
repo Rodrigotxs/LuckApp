@@ -1,6 +1,7 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ClientsService } from './clients.service';
+import { UpdateClientDto } from './dto/update-client.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -21,5 +22,11 @@ export class ClientsController {
   @ApiOperation({ summary: 'Retorna dados do cliente autenticado' })
   perfil(@CurrentUser() user: any) {
     return this.clientsService.findById(user.id);
+  }
+
+  @Patch('me')
+  @ApiOperation({ summary: 'Atualiza dados do cliente autenticado' })
+  atualizar(@CurrentUser() user: any, @Body() dto: UpdateClientDto) {
+    return this.clientsService.atualizar(user.id, dto);
   }
 }

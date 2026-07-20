@@ -49,6 +49,11 @@ export class WhatsappService {
     await this.enviarMensagem(whatsapp, mensagem);
   }
 
+  /** Envio genérico — usado por outros módulos para notificações customizadas. */
+  async notificar(whatsapp: string, mensagem: string): Promise<void> {
+    return this.enviarMensagem(whatsapp, mensagem);
+  }
+
   private async enviarMensagem(numero: string, mensagem: string): Promise<void> {
     if (!this.apiUrl || !this.apiKey) {
       this.logger.warn(`[WhatsApp] API não configurada. Mensagem para ${numero}: ${mensagem}`);
