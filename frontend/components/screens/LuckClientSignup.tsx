@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { LuckHeader, LuckProgress, LuckField, LuckCTA, LuckFooter, LuckSocialButtons } from '../luck';
 import { IconArrow, IconCheck, IconWhatsapp } from '../icons/Icons';
-import { api } from '@/lib/api';
+import { authService } from '@/lib/services';
 
 interface Props {
   onBack: () => void;
@@ -28,19 +28,26 @@ export function LuckClientSignup({ onBack, onNext, method, setMethod }: Props) {
       if (wa.length < 11) { setErro('WhatsApp deve ter 11 dígitos (com DDD)'); return; }
       setLoading(true);
       try {
-        await api.post('/auth/client/send-otp', { name: nome, whatsapp: wa });
+        await authService.sendClientOtp(nome, wa);
         sessionStorage.setItem('cadastro_whatsapp', wa);
         sessionStorage.setItem('cadastro_nome', nome);
+        sessionStorage.removeItem('cadastro_email');
         onNext();
       } catch (err: any) {
         setErro(err.response?.data?.message || 'Erro ao enviar código');
       } finally { setLoading(false); }
     } else {
-      // Fluxo por e-mail: só guarda e segue para OTP (o backend atual só suporta WhatsApp,
-      // mas mantemos o UI para paridade com o design).
-      sessionStorage.setItem('cadastro_email', email);
-      sessionStorage.setItem('cadastro_nome', nome);
-      onNext();
+      if (!/^\S+@\S+\.\S+$/.test(email)) { setErro('E-mail inválido'); return; }
+      setLoading(true);
+      try {
+        await authService.sendClientEmailOtp(nome, email);
+        sessionStorage.setItem('cadastro_email', email);
+        sessionStorage.setItem('cadastro_nome', nome);
+        sessionStorage.removeItem('cadastro_whatsapp');
+        onNext();
+      } catch (err: any) {
+        setErro(err.response?.data?.message || 'Erro ao enviar código por e-mail');
+      } finally { setLoading(false); }
     }
   };
 

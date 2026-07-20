@@ -6,6 +6,7 @@ import { LoginOwnerDto } from './dto/login-owner.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { SendOwnerOtpDto, VerifyOwnerOtpDto } from './dto/owner-otp.dto';
+import { SendClientEmailOtpDto, VerifyClientEmailOtpDto } from './dto/email-otp.dto';
 import { RequestPasswordResetDto, ConfirmPasswordResetDto } from './dto/password-reset.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
@@ -49,6 +50,20 @@ export class AuthController {
   }
 
   @Public()
+  @Post('client/send-email-otp')
+  @ApiOperation({ summary: 'Envia OTP para o e-mail do cliente' })
+  enviarOtpEmail(@Body() dto: SendClientEmailOtpDto) {
+    return this.authService.enviarOtpClienteEmail(dto);
+  }
+
+  @Public()
+  @Post('client/verify-email-otp')
+  @ApiOperation({ summary: 'Valida OTP recebido por e-mail e retorna JWT do cliente' })
+  verificarOtpEmail(@Body() dto: VerifyClientEmailOtpDto) {
+    return this.authService.verificarOtpClienteEmail(dto);
+  }
+
+  @Public()
   @Post('owner/send-otp')
   @ApiOperation({ summary: 'Envia OTP via WhatsApp para o dono (login sem senha)' })
   enviarOtpOwner(@Body() dto: SendOwnerOtpDto) {
@@ -79,10 +94,19 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('google')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Inicia OAuth Google Calendar' })
+  @ApiOperation({ summary: 'Inicia OAuth Google Calendar (redirect)' })
   googleAuth(@CurrentUser() user: any, @Res() res: any) {
     const url = this.googleCalendar.gerarUrlAutorizacao(user.id);
     return res.redirect(url);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('google/url')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Retorna URL de autorização OAuth Google Calendar (para redirect no frontend)' })
+  googleAuthUrl(@CurrentUser() user: any) {
+    const url = this.googleCalendar.gerarUrlAutorizacao(user.id);
+    return { url };
   }
 
   @Public()

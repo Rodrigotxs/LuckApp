@@ -41,6 +41,8 @@ export function LuckOwnerSignup({ onBack, onNext, selectedUnitId, setSelectedUni
         whatsapp: whatsapp.replace(/\D/g, '') || '5511000000000',
         barbershopName: barbearia,
         barbershopAddress: endereco,
+        zipCode: cep || undefined,
+        unitId: selectedUnitId || undefined,
       });
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify({ ...data.owner, role: 'owner' }));

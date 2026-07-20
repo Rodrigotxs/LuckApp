@@ -38,3 +38,11 @@ export async function sendClientOtp(name: string, whatsapp: string) {
 export async function verifyClientOtp(whatsapp: string, code: string) {
   return (await api.post('/auth/client/verify-otp', { whatsapp, code })).data;
 }
+
+export async function sendClientEmailOtp(name: string, email: string) {
+  return (await api.post('/auth/client/send-email-otp', { name, email })).data;
+}
+
+export async function verifyClientEmailOtp(email: string, code: string) {
+  return (await api.post('/auth/client/verify-email-otp', { email, code })).data;
+}

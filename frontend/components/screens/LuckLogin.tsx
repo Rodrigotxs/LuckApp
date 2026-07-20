@@ -152,6 +152,11 @@ export function LuckLogin({ onBack, onEnter, onOwnerOtpSent, onClientOtpSent }: 
         {erro && (
           <div style={{ marginTop: 8, padding: '10px 14px', background: '#c0392b15', border: '1px solid #c0392b40', borderRadius: 10, fontSize: 11.5, color: 'var(--red)' }}>
             {erro}
+            {role === 'owner' && /não encontramos|cadastre-se/i.test(erro) && (
+              <div style={{ marginTop: 6, fontSize: 11 }}>
+                Novo por aqui? Volte e escolha <b>Sou funcionário</b> para se cadastrar.
+              </div>
+            )}
           </div>
         )}
 

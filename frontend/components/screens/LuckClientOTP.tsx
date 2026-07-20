@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { LuckHeader, LuckProgress, LuckCTA, LuckFooter } from '../luck';
 import { IconMail, IconWhatsapp } from '../icons/Icons';
-import { api } from '@/lib/api';
+import { authService } from '@/lib/services';
 
 interface Props {
   onBack: () => void;
@@ -42,10 +42,13 @@ export function LuckClientOTP({ onBack, onNext, method }: Props) {
     if (codigo.length !== 6) { setErro('Digite os 6 dígitos'); return; }
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/client/verify-otp', { whatsapp, code: codigo });
+      const data = isEmail
+        ? await authService.verifyClientEmailOtp(email, codigo)
+        : await authService.verifyClientOtp(whatsapp, codigo);
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify({ ...data.client, role: 'client' }));
       sessionStorage.removeItem('cadastro_whatsapp');
+      sessionStorage.removeItem('cadastro_email');
       sessionStorage.removeItem('cadastro_nome');
       onNext();
     } catch (err: any) {
@@ -57,7 +60,10 @@ export function LuckClientOTP({ onBack, onNext, method }: Props) {
 
   const reenviar = async () => {
     setCountdown(23);
-    try { await api.post('/auth/client/send-otp', { name: nome, whatsapp }); } catch {}
+    try {
+      if (isEmail) await authService.sendClientEmailOtp(nome, email);
+      else await authService.sendClientOtp(nome, whatsapp);
+    } catch {}
   };
 
   const mm = String(Math.floor(countdown / 60)).padStart(2, '0');

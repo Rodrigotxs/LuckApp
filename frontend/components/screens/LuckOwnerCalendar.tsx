@@ -1,8 +1,10 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { LuckHeader, LuckProgress, LuckCTA, LuckFooter } from '../luck';
 import { LuckLogo } from '../luck/LuckLogo';
 import { IconArrow, IconCheck } from '../icons/Icons';
+import { ownerService } from '@/lib/services';
 
 interface Props {
   onBack: () => void;
@@ -10,6 +12,32 @@ interface Props {
 }
 
 export function LuckOwnerCalendar({ onBack, onNext }: Props) {
+  const [conectado, setConectado] = useState<boolean | null>(null);
+  const [email, setEmail] = useState<string>('');
+  const [conectando, setConectando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    ownerService.getMe()
+      .then((o) => {
+        setConectado(!!o.googleConnected);
+        setEmail(o.email || '');
+      })
+      .catch(() => setConectado(false));
+  }, []);
+
+  const conectar = async () => {
+    setConectando(true);
+    setErro('');
+    try {
+      const url = await ownerService.getGoogleAuthUrl();
+      window.location.href = url;
+    } catch (err: any) {
+      setErro(err.response?.data?.message || 'Não foi possível iniciar o OAuth');
+      setConectando(false);
+    }
+  };
+
   return (
     <div className="lk-screen">
       <LuckHeader onBack={onBack} />
@@ -26,9 +54,7 @@ export function LuckOwnerCalendar({ onBack, onNext }: Props) {
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginBottom: 12 }}>
             <LuckLogo size={42} />
             <div style={{ display: 'flex', gap: 3 }}>
-              {[0, 1, 2].map((i) => (
-                <div key={i} style={{ width: 3, height: 3, borderRadius: 2, background: 'var(--navy)' }} />
-              ))}
+              {[0, 1, 2].map((i) => <div key={i} style={{ width: 3, height: 3, borderRadius: 2, background: 'var(--navy)' }} />)}
             </div>
             <div style={{
               width: 42, height: 42, borderRadius: 8, background: 'white',
@@ -48,25 +74,58 @@ export function LuckOwnerCalendar({ onBack, onNext }: Props) {
           </div>
         </div>
 
-        <div style={{
-          background: '#4caf5012', border: '1px solid #4caf5040', borderRadius: 12,
-          padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
-        }}>
+        {conectado === null ? (
+          <div style={{ padding: 20, textAlign: 'center', fontSize: 12, color: '#bbb' }}>Verificando…</div>
+        ) : conectado ? (
           <div style={{
-            width: 34, height: 34, borderRadius: 17,
-            background: 'linear-gradient(135deg,#4285f4,#ea4335)',
-            display: 'grid', placeItems: 'center', color: 'white', fontSize: 12, fontWeight: 700,
-          }}>DM</div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10.5, color: '#2e7d32', fontWeight: 700, letterSpacing: '0.06em' }}>● CONECTADO</div>
-            <div style={{ fontSize: 12, fontWeight: 500 }}>diego@gmail.com</div>
+            background: '#4caf5012', border: '1px solid #4caf5040', borderRadius: 12,
+            padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <div style={{
+              width: 34, height: 34, borderRadius: 17,
+              background: 'linear-gradient(135deg,#4285f4,#ea4335)',
+              display: 'grid', placeItems: 'center', color: 'white', fontSize: 12, fontWeight: 700,
+            }}>
+              {(email[0] || '?').toUpperCase()}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 10.5, color: '#2e7d32', fontWeight: 700, letterSpacing: '0.06em' }}>● CONECTADO</div>
+              <div style={{ fontSize: 12, fontWeight: 500 }}>{email}</div>
+            </div>
+            <IconCheck size={16} color="#2e7d32" strokeWidth={2.5} />
           </div>
-          <IconCheck size={16} color="#2e7d32" strokeWidth={2.5} />
-        </div>
+        ) : (
+          <>
+            <button
+              onClick={conectar}
+              disabled={conectando}
+              className="lk-press"
+              style={{
+                width: '100%', padding: '13px', borderRadius: 12,
+                border: '1.5px solid var(--navy)',
+                background: 'white',
+                color: 'var(--navy)',
+                fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              }}
+            >
+              {conectando ? 'REDIRECIONANDO…' : '🔗 CONECTAR GOOGLE CALENDAR'}
+            </button>
+            {erro && (
+              <div style={{ marginTop: 10, padding: '10px 14px', background: '#c0392b15', border: '1px solid #c0392b40', borderRadius: 10, fontSize: 11.5, color: 'var(--red)' }}>
+                {erro}
+              </div>
+            )}
+            <div style={{ marginTop: 10, fontSize: 10.5, color: '#999', lineHeight: 1.5 }}>
+              Sem Google conectado, o app não impede conflitos de agenda automaticamente.
+              Você pode conectar depois nas configurações.
+            </div>
+          </>
+        )}
       </div>
       <LuckFooter>
         <LuckCTA variant="navy" onClick={onNext} icon={<IconArrow size={17} color="white" strokeWidth={2} />}>
-          CONTINUAR
+          {conectado ? 'CONTINUAR' : 'PULAR POR ENQUANTO'}
         </LuckCTA>
       </LuckFooter>
     </div>

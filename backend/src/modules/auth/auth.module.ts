@@ -6,6 +6,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { WhatsappModule } from '../integrations/whatsapp/whatsapp.module';
+import { EmailModule } from '../integrations/email/email.module';
 import { GoogleCalendarModule } from '../integrations/google-calendar/google-calendar.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { GoogleCalendarModule } from '../integrations/google-calendar/google-cal
       inject: [ConfigService],
     }),
     WhatsappModule,
+    EmailModule,
     GoogleCalendarModule,
   ],
   controllers: [AuthController],

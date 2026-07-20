@@ -12,13 +12,21 @@ export class OwnersService {
       include: { workingHours: true },
     });
     if (!owner) throw new NotFoundException('Dono não encontrado');
-    const { passwordHash, googleAccessToken, googleRefreshToken, ...safe } = owner;
-    return safe;
+    const {
+      passwordHash, googleAccessToken, googleRefreshToken,
+      otpCode, otpExpiresAt, passwordResetToken, passwordResetExpires,
+      ...safe
+    } = owner;
+    return { ...safe, googleConnected: Boolean(owner.googleAccessToken && owner.googleRefreshToken) };
   }
 
   async update(id: string, dto: UpdateOwnerDto) {
     const owner = await this.prisma.owner.update({ where: { id }, data: dto });
-    const { passwordHash, googleAccessToken, googleRefreshToken, ...safe } = owner;
-    return safe;
+    const {
+      passwordHash, googleAccessToken, googleRefreshToken,
+      otpCode, otpExpiresAt, passwordResetToken, passwordResetExpires,
+      ...safe
+    } = owner;
+    return { ...safe, googleConnected: Boolean(owner.googleAccessToken && owner.googleRefreshToken) };
   }
 }

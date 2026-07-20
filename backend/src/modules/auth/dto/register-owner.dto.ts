@@ -27,4 +27,18 @@ export class RegisterOwnerDto {
   @IsOptional()
   @IsString()
   barbershopAddress?: string;
+
+  @ApiProperty({ example: '05433-010', required: false })
+  @IsOptional()
+  @IsString()
+  zipCode?: string;
+
+  /**
+   * Se informado, o backend também cria um Barber ligado a esta unidade,
+   * tornando o dono visível como profissional no BarberPicker público.
+   */
+  @ApiProperty({ example: 'unit-uuid', required: false })
+  @IsOptional()
+  @IsString()
+  unitId?: string;
 }

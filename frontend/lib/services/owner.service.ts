@@ -10,6 +10,7 @@ export interface OwnerMe {
   zipCode?: string;
   logoUrl?: string;
   monthlyGoal?: number;
+  googleConnected?: boolean;
 }
 
 export async function getMe(): Promise<OwnerMe> {
@@ -18,4 +19,9 @@ export async function getMe(): Promise<OwnerMe> {
 
 export async function updateMe(data: Partial<OwnerMe>): Promise<OwnerMe> {
   return (await api.patch('/owners/me', data)).data;
+}
+
+export async function getGoogleAuthUrl(): Promise<string> {
+  const res = await api.get('/auth/google/url');
+  return res.data.url;
 }

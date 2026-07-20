@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LuckHeader, LuckCTA, LuckFooter } from '../luck';
 import { IconArrow, IconCalendar, IconPlus, IconUser } from '../icons/Icons';
-import { appointmentsService, financialService } from '@/lib/services';
+import { appointmentsService, financialService, rescheduleService } from '@/lib/services';
 import type { Appointment } from '@/lib/services/appointments.service';
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
   onNew: () => void;
   onProfile: () => void;
   onCalendar: () => void;
+  onRescheduleRequests?: () => void;
 }
 
 interface MiniKpiProps { label: string; value: string; navy?: boolean; }
@@ -24,23 +25,26 @@ const MiniKpi = ({ label, value, navy }: MiniKpiProps) => (
   </div>
 );
 
-export function LuckOwnerDashboard({ onGoFinance, onNew, onProfile, onCalendar }: Props) {
+export function LuckOwnerDashboard({ onGoFinance, onNew, onProfile, onCalendar, onRescheduleRequests }: Props) {
   const [items, setItems] = useState<Appointment[]>([]);
   const [total, setTotal] = useState(0);
   const [livres, setLivres] = useState('—');
   const [loaded, setLoaded] = useState(false);
+  const [pendentes, setPendentes] = useState(0);
 
   const carregar = async () => {
     try {
       const data = format(new Date(), 'yyyy-MM-dd');
-      const [ags, sum] = await Promise.all([
+      const [ags, sum, req] = await Promise.all([
         appointmentsService.listOwner({ data }),
         financialService.summary('today').catch(() => null),
+        rescheduleService.listOwner('PENDING').catch(() => []),
       ]);
       setItems(ags);
       setTotal(sum?.total || 0);
       // "Livres" — 24 slots/dia menos os agendamentos (heurística)
       setLivres(String(Math.max(0, 24 - ags.length)));
+      setPendentes(req.length);
       setLoaded(true);
     } catch {
       setLoaded(true);
@@ -63,6 +67,25 @@ export function LuckOwnerDashboard({ onGoFinance, onNew, onProfile, onCalendar }
             }}>
               <IconUser size={15} color="#888" />
             </button>
+            {onRescheduleRequests && (
+              <button onClick={onRescheduleRequests} style={{
+                position: 'relative',
+                width: 34, height: 34, borderRadius: 17, background: 'var(--bg2)', border: 'none',
+                display: 'grid', placeItems: 'center', cursor: 'pointer',
+              }} title="Pedidos de reagendamento">
+                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--navy)' }}>↻</span>
+                {pendentes > 0 && (
+                  <span style={{
+                    position: 'absolute', top: -3, right: -3,
+                    minWidth: 16, height: 16, padding: '0 4px',
+                    background: 'var(--red)', color: 'white',
+                    fontSize: 9, fontWeight: 700,
+                    borderRadius: 8, display: 'grid', placeItems: 'center',
+                    border: '2px solid white',
+                  }}>{pendentes}</span>
+                )}
+              </button>
+            )}
             <button onClick={onCalendar} style={{
               width: 34, height: 34, borderRadius: 17, background: 'var(--bg2)', border: 'none',
               display: 'grid', placeItems: 'center', cursor: 'pointer',

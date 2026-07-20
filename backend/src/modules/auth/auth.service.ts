@@ -8,7 +8,9 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsappService } from '../integrations/whatsapp/whatsapp.service';
+import { EmailService } from '../integrations/email/email.service';
 import { RegisterOwnerDto } from './dto/register-owner.dto';
+import { SendClientEmailOtpDto, VerifyClientEmailOtpDto } from './dto/email-otp.dto';
 import { LoginOwnerDto } from './dto/login-owner.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -22,6 +24,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private whatsapp: WhatsappService,
+    private email: EmailService,
   ) {}
 
   async registerOwner(dto: RegisterOwnerDto) {
@@ -38,8 +41,33 @@ export class AuthService {
         whatsapp: dto.whatsapp,
         barbershopName: dto.barbershopName,
         barbershopAddress: dto.barbershopAddress,
+        zipCode: dto.zipCode,
       },
     });
+
+    // Se informou unitId no cadastro, cria o Barber (o próprio dono como profissional
+    // da unidade escolhida — assim ele aparece no BarberPicker público).
+    if (dto.unitId) {
+      const unit = await this.prisma.unit.findUnique({ where: { id: dto.unitId } });
+      if (unit) {
+        const avatar = dto.name
+          .split(' ')
+          .slice(0, 2)
+          .map((n) => n[0])
+          .join('')
+          .toUpperCase();
+        await this.prisma.barber.create({
+          data: {
+            ownerId: owner.id,
+            unitId: unit.id,
+            name: dto.name,
+            role: 'Barbeiro',
+            rating: 5.0,
+            avatarLabel: avatar,
+          },
+        });
+      }
+    }
 
     const token = this.gerarToken(owner.id, 'owner');
     return { token, owner: this.sanitizarOwner(owner) };
@@ -93,10 +121,61 @@ export class AuthService {
     return { token, client: { id: client.id, name: client.name, whatsapp: client.whatsapp } };
   }
 
+  // ─── OTP do cliente por e-mail (paridade com WhatsApp) ────────────
+  async enviarOtpClienteEmail(dto: SendClientEmailOtpDto) {
+    const codigo = this.gerarCodigoOtp();
+    const expiracao = new Date(Date.now() + 10 * 60 * 1000);
+
+    // Cliente é identificado por whatsapp (único). Aqui procuramos por email;
+    // se não existir client com esse email, criamos um placeholder cujo
+    // whatsapp é derivado do email (temporário, atualizável no perfil).
+    const existente = await this.prisma.client.findFirst({ where: { email: dto.email } });
+    if (existente) {
+      await this.prisma.client.update({
+        where: { id: existente.id },
+        data: { emailOtpCode: codigo, emailOtpExpiresAt: expiracao, name: dto.name },
+      });
+    } else {
+      await this.prisma.client.create({
+        data: {
+          name: dto.name,
+          email: dto.email,
+          whatsapp: `email:${dto.email}`, // placeholder — cliente pode atualizar depois
+          emailOtpCode: codigo,
+          emailOtpExpiresAt: expiracao,
+        },
+      });
+    }
+
+    await this.email.enviarOtp(dto.email, codigo);
+    return { message: 'Código OTP enviado por e-mail' };
+  }
+
+  async verificarOtpClienteEmail(dto: VerifyClientEmailOtpDto) {
+    const client = await this.prisma.client.findFirst({ where: { email: dto.email } });
+    if (!client || !client.emailOtpCode) throw new BadRequestException('Código inválido ou expirado');
+    if (client.emailOtpCode !== dto.code) throw new BadRequestException('Código OTP incorreto');
+    if (client.emailOtpExpiresAt && client.emailOtpExpiresAt < new Date()) {
+      throw new BadRequestException('Código expirado. Solicite um novo.');
+    }
+
+    await this.prisma.client.update({
+      where: { id: client.id },
+      data: { emailOtpCode: null, emailOtpExpiresAt: null },
+    });
+
+    const token = this.gerarToken(client.id, 'client');
+    return { token, client: { id: client.id, name: client.name, email: client.email } };
+  }
+
   // ─── OTP do dono (login via WhatsApp) ─────────────────────────────
   async enviarOtpOwner(dto: SendOwnerOtpDto) {
     const owner = await this.prisma.owner.findFirst({ where: { whatsapp: dto.whatsapp } });
-    if (!owner) throw new BadRequestException('Nenhuma conta encontrada com este WhatsApp');
+    if (!owner) {
+      throw new BadRequestException(
+        'Não encontramos uma conta com este WhatsApp. Cadastre-se como funcionário para começar.',
+      );
+    }
 
     const codigo = this.gerarCodigoOtp();
     const expiracao = new Date(Date.now() + 10 * 60 * 1000);

@@ -18,6 +18,7 @@ export { LuckOwnerServices } from './LuckOwnerServices';
 export { LuckOwnerDone } from './LuckOwnerDone';
 export { LuckOwnerDashboard } from './LuckOwnerDashboard';
 export { LuckOwnerAgendaEditor } from './LuckOwnerAgendaEditor';
+export { LuckOwnerRescheduleRequests } from './LuckOwnerRescheduleRequests';
 export { LuckOwnerNewMenu } from './LuckOwnerNewMenu';
 export { LuckOwnerBookForm } from './LuckOwnerBookForm';
 export { LuckOwnerBlockForm } from './LuckOwnerBlockForm';

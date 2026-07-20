@@ -9,6 +9,7 @@ import {
   LuckOwnerSignup, LuckOwnerCalendar, LuckOwnerServices, LuckOwnerDone,
   LuckOwnerDashboard, LuckOwnerAgendaEditor, LuckOwnerNewMenu,
   LuckOwnerBookForm, LuckOwnerBlockForm, LuckOwnerFinance,
+  LuckOwnerRescheduleRequests,
   LuckProfile,
 } from '@/components/screens';
 import { LUCK_BARBERS, LUCK_SERVICES } from '@/components/screens/data';
@@ -21,7 +22,7 @@ type Step =
   | 'c-home' | 'c-reschedule' | 'c-profile'
   | 'o-signup' | 'o-calendar' | 'o-services' | 'o-done'
   | 'o-dashboard' | 'o-agenda' | 'o-new' | 'o-book' | 'o-block'
-  | 'o-finance' | 'o-profile';
+  | 'o-reschedule-requests' | 'o-finance' | 'o-profile';
 
 export default function LuckApp() {
   const [step, setStep] = useState<Step>('splash');
@@ -200,10 +201,13 @@ export default function LuckApp() {
           onNew={() => goto('o-new')}
           onProfile={() => goto('o-profile')}
           onCalendar={() => goto('o-agenda')}
+          onRescheduleRequests={() => goto('o-reschedule-requests')}
         />
       );
     case 'o-agenda':
       return <LuckOwnerAgendaEditor onBack={() => goto('o-dashboard')} />;
+    case 'o-reschedule-requests':
+      return <LuckOwnerRescheduleRequests onBack={() => goto('o-dashboard')} />;
     case 'o-profile':
       return <LuckProfile role="owner" onBack={() => goto('o-dashboard')} onLogout={logout} />;
     case 'o-finance':
