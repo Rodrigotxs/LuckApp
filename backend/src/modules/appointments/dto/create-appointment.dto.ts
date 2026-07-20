@@ -6,6 +6,11 @@ export class CreateAppointmentDto {
   @IsString()
   ownerId: string;
 
+  @ApiProperty({ required: false, description: 'Só para dono: agendar em nome de outro cliente' })
+  @IsOptional()
+  @IsString()
+  clientId?: string;
+
   @ApiProperty()
   @IsString()
   serviceId: string;

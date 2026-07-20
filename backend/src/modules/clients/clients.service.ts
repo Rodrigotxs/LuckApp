@@ -14,6 +14,13 @@ export class ClientsService {
     return safe;
   }
 
+  /** Usado pelo painel do dono ao agendar manualmente para um cliente sem cadastro. */
+  async findOrCreate(data: { name: string; whatsapp: string; email?: string }) {
+    const existente = await this.prisma.client.findUnique({ where: { whatsapp: data.whatsapp } });
+    if (existente) return existente;
+    return this.prisma.client.create({ data });
+  }
+
   async atualizar(id: string, dto: UpdateClientDto) {
     // Se trocando WhatsApp, garante unicidade
     if (dto.whatsapp) {

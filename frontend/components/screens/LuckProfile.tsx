@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LuckHeader, LuckField, LuckCTA, LuckFooter } from '../luck';
 import { IconCalendar, IconCheck, IconEdit, IconPlus } from '../icons/Icons';
 import { LUCK_UNITS } from './data';
+import { clientService, ownerService } from '@/lib/services';
 
 interface Props {
   role: 'client' | 'owner';
@@ -16,14 +17,66 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
   const isOwner = role === 'owner';
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [name, setName] = useState(isOwner ? 'Diego Monteiro' : 'Ricardo Almeida');
-  const [whatsapp, setWhatsapp] = useState(isOwner ? '(11) 99887-6655' : '(11) 98765-4321');
-  const [email, setEmail] = useState(isOwner ? 'diego@navalha.co' : 'ricardo.almeida@gmail.com');
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState('');
+  const [name, setName] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
+  const [email, setEmail] = useState('');
   const [establishment, setEstablishment] = useState('Barbearia Luck');
   const [unitId, setUnitId] = useState('atlantica');
   const [unitOpen, setUnitOpen] = useState(false);
   const color = isOwner ? 'var(--navy)' : 'var(--red)';
   const colorSoft = isOwner ? 'var(--navy-soft)' : 'var(--red-soft)';
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (isOwner) {
+          const owner = await ownerService.getMe();
+          setName(owner.name);
+          setWhatsapp(owner.whatsapp);
+          setEmail(owner.email);
+          setEstablishment(owner.barbershopName);
+        } else {
+          const client = await clientService.getMe();
+          setName(client.name);
+          setWhatsapp(client.whatsapp);
+          setEmail(client.email || '');
+        }
+      } catch {
+        // Backend offline: usa defaults do design
+        setName(isOwner ? 'Diego Monteiro' : 'Ricardo Almeida');
+        setWhatsapp(isOwner ? '(11) 99887-6655' : '(11) 98765-4321');
+        setEmail(isOwner ? 'diego@navalha.co' : 'ricardo.almeida@gmail.com');
+      }
+    })();
+  }, [isOwner]);
+
+  const salvar = async () => {
+    setErro('');
+    setLoading(true);
+    try {
+      if (isOwner) {
+        await ownerService.updateMe({ name, whatsapp, email, barbershopName: establishment });
+      } else {
+        await clientService.updateMe({ name, whatsapp, email });
+      }
+      setEditing(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err: any) {
+      setErro(err.response?.data?.message || 'Erro ao salvar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const iniciais = name
+    .split(' ')
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase() || (isOwner ? 'DM' : 'RA');
 
   return (
     <div className="lk-screen">
@@ -61,7 +114,7 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
               background: colorSoft, border: `2px solid ${color}`,
               display: 'grid', placeItems: 'center', fontSize: 22, fontWeight: 700, color,
             }}>
-              {isOwner ? 'DM' : 'RA'}
+              {iniciais}
             </div>
             {editing && (
               <div style={{
@@ -152,6 +205,12 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
           <LuckField label="Nova senha" placeholder="Deixe em branco para não alterar" state="idle" />
         )}
 
+        {erro && (
+          <div style={{ marginTop: 8, padding: '10px 14px', background: '#c0392b15', border: '1px solid #c0392b40', borderRadius: 10, fontSize: 11.5, color: 'var(--red)' }}>
+            {erro}
+          </div>
+        )}
+
         {!editing && saved && (
           <div style={{
             marginTop: 8, padding: '12px 14px',
@@ -188,10 +247,11 @@ export function LuckProfile({ role, onBack, onLogout, onCalendar }: Props) {
         <LuckFooter>
           <LuckCTA
             variant={isOwner ? 'navy' : 'primary'}
-            onClick={() => { setEditing(false); setSaved(true); setTimeout(() => setSaved(false), 2500); }}
+            onClick={salvar}
+            disabled={loading}
             icon={<IconCheck size={17} color="white" strokeWidth={2.5} />}
           >
-            SALVAR ALTERAÇÕES
+            {loading ? 'SALVANDO…' : 'SALVAR ALTERAÇÕES'}
           </LuckCTA>
         </LuckFooter>
       )}

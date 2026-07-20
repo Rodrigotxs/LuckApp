@@ -1,8 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { LuckHeader, LuckCTA, LuckFooter } from '../luck';
 import { IconArrow, IconCalendar, IconPlus, IconStar, IconUser } from '../icons/Icons';
+import { appointmentsService, loyaltyService } from '@/lib/services';
+import type { Appointment } from '@/lib/services/appointments.service';
+import type { LoyaltyStatus } from '@/lib/services/loyalty.service';
 
 interface Props {
   onBookNew: () => void;
@@ -12,13 +17,53 @@ interface Props {
   hasAppointment: boolean;
 }
 
-export function LuckClientHome({ onBookNew, onLogout, onProfile, onReschedule, hasAppointment }: Props) {
-  const [status, setStatus] = useState<'confirmed' | 'cancelled'>('confirmed');
+export function LuckClientHome({ onBookNew, onLogout, onProfile, onReschedule, hasAppointment: hasAppointmentFallback }: Props) {
   const [showFidelidade, setShowFidelidade] = useState(false);
+  const [proximo, setProximo] = useState<Appointment | null>(null);
+  const [historico, setHistorico] = useState<Appointment[]>([]);
+  const [loyalty, setLoyalty] = useState<LoyaltyStatus | null>(null);
+  const [status, setStatus] = useState<Appointment['status'] | null>(null);
+  const [nomeCliente, setNomeCliente] = useState('Cliente');
 
-  const nomeCliente = typeof window !== 'undefined'
-    ? (JSON.parse(localStorage.getItem('user') || '{}').name || 'Cliente').split(' ')[0]
-    : 'Cliente';
+  const carregar = async () => {
+    try {
+      const [ags, ly] = await Promise.all([
+        appointmentsService.listClient().catch(() => [] as Appointment[]),
+        loyaltyService.status().catch(() => null),
+      ]);
+      const agora = new Date();
+      const futuros = ags
+        .filter((a) => a.status !== 'CANCELLED' && parseISO(a.startAt) >= agora)
+        .sort((a, b) => a.startAt.localeCompare(b.startAt));
+      const passados = ags
+        .filter((a) => a.status === 'COMPLETED' || parseISO(a.startAt) < agora)
+        .sort((a, b) => b.startAt.localeCompare(a.startAt))
+        .slice(0, 5);
+      setProximo(futuros[0] || null);
+      setStatus(futuros[0]?.status || null);
+      setHistorico(passados);
+      setLoyalty(ly);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const u = JSON.parse(localStorage.getItem('user') || '{}');
+      if (u.name) setNomeCliente(u.name.split(' ')[0]);
+    }
+    carregar();
+  }, []);
+
+  const cancelar = async () => {
+    if (!proximo) return;
+    try {
+      await appointmentsService.cancel(proximo.id);
+      setStatus('CANCELLED');
+    } catch {}
+  };
+
+  // Se backend disponível, hasAppointment vem do carregar; senão fallback do prop
+  const hasAppointment = proximo ? true : hasAppointmentFallback;
 
   return (
     <div className="lk-screen">
@@ -75,25 +120,33 @@ export function LuckClientHome({ onBookNew, onLogout, onProfile, onReschedule, h
               borderRadius: 14, padding: '16px 18px', marginBottom: 16,
             }}>
               <div className="lk-eyebrow" style={{ fontSize: 9.5, marginBottom: 6 }}>PRÓXIMO AGENDAMENTO</div>
-              {status === 'cancelled' ? (
+              {status === 'CANCELLED' ? (
                 <div style={{ fontSize: 13, color: '#999', textAlign: 'center', padding: '10px 0' }}>
                   Agendamento cancelado.
                 </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div className="lk-serif" style={{ fontSize: 17, fontWeight: 800, color: 'var(--ink)' }}>Combo Premium</div>
-                    <div style={{ fontSize: 11.5, color: '#888', marginTop: 3 }}>Quarta · 29 abril · 14:30</div>
+                    <div className="lk-serif" style={{ fontSize: 17, fontWeight: 800, color: 'var(--ink)' }}>
+                      {proximo?.service.name || 'Combo Premium'}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: '#888', marginTop: 3 }}>
+                      {proximo
+                        ? format(parseISO(proximo.startAt), "EEEE · dd 'de' MMMM · HH:mm", { locale: ptBR })
+                        : 'Quarta · 29 abril · 14:30'}
+                    </div>
                   </div>
                   <div style={{
-                    padding: '5px 10px', background: '#4caf5018', color: '#2e7d32',
+                    padding: '5px 10px',
+                    background: status === 'CONFIRMED' ? '#4caf5018' : '#f5a62318',
+                    color: status === 'CONFIRMED' ? '#2e7d32' : '#b8860b',
                     fontSize: 9.5, fontWeight: 700, borderRadius: 6,
                   }}>
-                    CONFIRMADO
+                    {status === 'CONFIRMED' ? 'CONFIRMADO' : 'AGENDADO'}
                   </div>
                 </div>
               )}
-              {status !== 'cancelled' && (
+              {status !== 'CANCELLED' && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                   <button onClick={onReschedule} className="lk-press" style={{
                     flex: 1, textAlign: 'center', padding: '8px 0',
@@ -101,7 +154,7 @@ export function LuckClientHome({ onBookNew, onLogout, onProfile, onReschedule, h
                     fontSize: 11, fontWeight: 700, color: '#777', background: 'white',
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}>REMARCAR</button>
-                  <button onClick={() => setStatus('cancelled')} className="lk-press" style={{
+                  <button onClick={cancelar} className="lk-press" style={{
                     flex: 1, textAlign: 'center', padding: '8px 0',
                     border: '1px solid var(--red)', borderRadius: 8,
                     fontSize: 11, fontWeight: 700, color: 'var(--red)', background: 'white',
@@ -126,36 +179,61 @@ export function LuckClientHome({ onBookNew, onLogout, onProfile, onReschedule, h
                 fontFamily: 'inherit', textAlign: 'left',
               }}>
                 <IconStar size={18} color="var(--navy)" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>Fidelidade · 14 pts</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>
+                  Fidelidade · {loyalty ? `${loyalty.pontos} pts` : '—'}
+                </span>
               </button>
             </div>
-            {showFidelidade && (
+            {showFidelidade && loyalty && (
               <div style={{
                 background: 'var(--navy-soft)', borderRadius: 10, padding: '10px 14px', marginBottom: 18,
                 fontSize: 11, color: 'var(--ink)', lineHeight: 1.4,
               }}>
-                Faltam <b>6 pts</b> para seu próximo corte grátis. Cada atendimento vale 1 ponto.
+                {loyalty.recompensa}
+                {loyalty.restante === 0 && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        await loyaltyService.redeem();
+                        await carregar();
+                      } catch {}
+                    }}
+                    style={{
+                      display: 'block', marginTop: 8, padding: '6px 12px',
+                      background: 'var(--navy)', color: 'white', border: 'none',
+                      borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    RESGATAR RECOMPENSA
+                  </button>
+                )}
               </div>
             )}
 
             <div className="lk-eyebrow" style={{ fontSize: 9.5, marginBottom: 10 }}>HISTÓRICO</div>
             <div style={{ background: 'var(--bg2)', borderRadius: 12 }}>
-              {[
-                { d: '20 abr', s: 'Combo Premium', v: 75 },
-                { d: '06 abr', s: 'Corte Masculino', v: 45 },
-                { d: '23 mar', s: 'Combo Premium', v: 75 },
-              ].map((h, i) => (
-                <div key={i} style={{
-                  display: 'flex', justifyContent: 'space-between',
-                  padding: '11px 14px', borderTop: i === 0 ? 'none' : '1px solid white', fontSize: 12,
-                }}>
-                  <span style={{ color: '#777' }}>
-                    <span className="lk-mono" style={{ color: '#999', marginRight: 8 }}>{h.d}</span>
-                    {h.s}
-                  </span>
-                  <span className="lk-mono" style={{ fontWeight: 700, color: 'var(--ink)' }}>R$ {h.v}</span>
+              {historico.length === 0 ? (
+                <div style={{ padding: '18px 12px', fontSize: 11, color: '#aaa', textAlign: 'center' }}>
+                  Seu histórico de visitas vai aparecer aqui.
                 </div>
-              ))}
+              ) : (
+                historico.map((h, i) => (
+                  <div key={h.id} style={{
+                    display: 'flex', justifyContent: 'space-between',
+                    padding: '11px 14px', borderTop: i === 0 ? 'none' : '1px solid white', fontSize: 12,
+                  }}>
+                    <span style={{ color: '#777' }}>
+                      <span className="lk-mono" style={{ color: '#999', marginRight: 8 }}>
+                        {format(parseISO(h.startAt), 'dd MMM', { locale: ptBR })}
+                      </span>
+                      {h.service.name}
+                    </span>
+                    <span className="lk-mono" style={{ fontWeight: 700, color: 'var(--ink)' }}>
+                      R$ {h.service.price}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </>
         )}

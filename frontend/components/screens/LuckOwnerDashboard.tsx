@@ -1,7 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { LuckHeader, LuckCTA, LuckFooter } from '../luck';
 import { IconArrow, IconCalendar, IconPlus, IconUser } from '../icons/Icons';
+import { appointmentsService, financialService } from '@/lib/services';
+import type { Appointment } from '@/lib/services/appointments.service';
 
 interface Props {
   onGoFinance: () => void;
@@ -20,13 +25,32 @@ const MiniKpi = ({ label, value, navy }: MiniKpiProps) => (
 );
 
 export function LuckOwnerDashboard({ onGoFinance, onNew, onProfile, onCalendar }: Props) {
-  const items = [
-    { time: '08:30', name: 'Lucas P.', svc: 'Combo', status: 'done' as const },
-    { time: '10:30', name: 'Marcos D.', svc: 'Barba', status: 'done' as const },
-    { time: '13:30', name: 'André S.', svc: 'Combo', status: 'live' as const },
-    { time: '15:30', name: 'Bruno H.', svc: 'Corte', status: 'next' as const },
-    { time: '17:30', name: 'Felipe T.', svc: 'Combo', status: 'next' as const },
-  ];
+  const [items, setItems] = useState<Appointment[]>([]);
+  const [total, setTotal] = useState(0);
+  const [livres, setLivres] = useState('—');
+  const [loaded, setLoaded] = useState(false);
+
+  const carregar = async () => {
+    try {
+      const data = format(new Date(), 'yyyy-MM-dd');
+      const [ags, sum] = await Promise.all([
+        appointmentsService.listOwner({ data }),
+        financialService.summary('today').catch(() => null),
+      ]);
+      setItems(ags);
+      setTotal(sum?.total || 0);
+      // "Livres" — 24 slots/dia menos os agendamentos (heurística)
+      setLivres(String(Math.max(0, 24 - ags.length)));
+      setLoaded(true);
+    } catch {
+      setLoaded(true);
+    }
+  };
+
+  useEffect(() => { carregar(); }, []);
+
+  const contarNaoCancelados = items.filter((a) => a.status !== 'CANCELLED').length;
+  const agora = new Date();
 
   return (
     <div className="lk-screen">
@@ -55,44 +79,60 @@ export function LuckOwnerDashboard({ onGoFinance, onNew, onProfile, onCalendar }
         }
       />
       <div className="lk-scroll" style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 120px' }}>
-        <div className="lk-eyebrow" style={{ marginTop: 8 }}>SEGUNDA · 27 ABR</div>
+        <div className="lk-eyebrow" style={{ marginTop: 8 }}>
+          {format(new Date(), "EEEE · dd MMM", { locale: ptBR }).toUpperCase()}
+        </div>
         <div className="lk-serif" style={{ fontSize: 24, fontWeight: 800, marginBottom: 14 }}>
           Sua <em style={{ color: 'var(--navy)', fontStyle: 'italic' }}>agenda</em>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 16 }}>
-          <MiniKpi label="HOJE" value="5" />
-          <MiniKpi label="LIVRES" value="9" navy />
-          <MiniKpi label="R$" value="305" />
+          <MiniKpi label="HOJE" value={String(contarNaoCancelados)} />
+          <MiniKpi label="LIVRES" value={livres} navy />
+          <MiniKpi label="R$" value={String(Math.round(total))} />
         </div>
 
-        <div style={{ background: 'var(--bg2)', borderRadius: 14, padding: '4px 14px' }}>
-          {items.map((a, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0',
-              borderTop: i === 0 ? 'none' : '1px solid var(--gray-soft)',
-            }}>
-              <div className="lk-mono" style={{ width: 40, fontSize: 10.5, color: '#999' }}>{a.time}</div>
-              <div style={{
-                flex: 1, padding: '8px 10px', borderRadius: 8,
-                background:
-                  a.status === 'live' ? 'var(--red-soft)' :
-                  a.status === 'done' ? 'transparent' : 'white',
-                borderLeft: `2.5px solid ${
-                  a.status === 'live' ? 'var(--red)' :
-                  a.status === 'next' ? 'var(--navy)' : 'var(--gray)'
-                }`,
-                opacity: a.status === 'done' ? 0.5 : 1,
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              }}>
-                <span style={{ fontSize: 12, fontWeight: 700, textDecoration: a.status === 'done' ? 'line-through' : 'none' }}>
-                  {a.name} · {a.svc}
-                </span>
-                {a.status === 'live' && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--red)' }}>AGORA</span>}
-              </div>
-            </div>
-          ))}
-        </div>
+        {!loaded ? (
+          <div style={{ padding: '30px 0', textAlign: 'center', color: '#bbb', fontSize: 12 }}>Carregando…</div>
+        ) : items.length === 0 ? (
+          <div style={{
+            background: 'var(--bg2)', borderRadius: 14, padding: '28px 18px',
+            textAlign: 'center', color: '#888', fontSize: 12,
+          }}>
+            Nenhum agendamento para hoje. Bora aproveitar para descansar? 🧉
+          </div>
+        ) : (
+          <div style={{ background: 'var(--bg2)', borderRadius: 14, padding: '4px 14px' }}>
+            {items.map((a, i) => {
+              const start = parseISO(a.startAt);
+              const end = parseISO(a.endAt);
+              const isDone = a.status === 'COMPLETED';
+              const isCancelled = a.status === 'CANCELLED';
+              const isLive = start <= agora && end > agora && !isDone && !isCancelled;
+              const barColor = isLive ? 'var(--red)' : isCancelled ? 'var(--gray)' : 'var(--navy)';
+              return (
+                <div key={a.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--gray-soft)',
+                }}>
+                  <div className="lk-mono" style={{ width: 40, fontSize: 10.5, color: '#999' }}>{format(start, 'HH:mm')}</div>
+                  <div style={{
+                    flex: 1, padding: '8px 10px', borderRadius: 8,
+                    background: isLive ? 'var(--red-soft)' : isDone ? 'transparent' : 'white',
+                    borderLeft: `2.5px solid ${barColor}`,
+                    opacity: isDone || isCancelled ? 0.5 : 1,
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, textDecoration: isDone || isCancelled ? 'line-through' : 'none' }}>
+                      {a.client?.name || 'Cliente'} · {a.service.name}
+                    </span>
+                    {isLive && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--red)' }}>AGORA</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
       <LuckFooter>
         <LuckCTA variant="navy" onClick={onGoFinance} icon={<IconArrow size={17} color="white" strokeWidth={2} />}>

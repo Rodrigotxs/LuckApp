@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ClientsService } from './clients.service';
 import { UpdateClientDto } from './dto/update-client.dto';
@@ -28,5 +28,11 @@ export class ClientsController {
   @ApiOperation({ summary: 'Atualiza dados do cliente autenticado' })
   atualizar(@CurrentUser() user: any, @Body() dto: UpdateClientDto) {
     return this.clientsService.atualizar(user.id, dto);
+  }
+
+  @Post('find-or-create')
+  @ApiOperation({ summary: 'Dono cria/localiza um cliente pelo WhatsApp (para agendar manualmente)' })
+  findOrCreate(@Body() dto: { name: string; whatsapp: string; email?: string }) {
+    return this.clientsService.findOrCreate(dto);
   }
 }

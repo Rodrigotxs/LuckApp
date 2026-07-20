@@ -1,8 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { LuckHeader, LuckCTA, LuckFooter } from '../luck';
 import { IconArrow, IconCalendar, IconClock } from '../icons/Icons';
+import { appointmentsService, rescheduleService } from '@/lib/services';
+import type { Appointment } from '@/lib/services/appointments.service';
 
 interface Props {
   onBack: () => void;
@@ -11,9 +15,44 @@ interface Props {
   onBookNew: () => void;
 }
 
-export function LuckClientReschedule({ onBack, onSubmit, hasAppointment, onBookNew }: Props) {
+export function LuckClientReschedule({ onBack, onSubmit, hasAppointment: hasAppointmentFallback, onBookNew }: Props) {
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [current, setCurrent] = useState<Appointment | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    appointmentsService.listClient()
+      .then((ags) => {
+        const agora = new Date();
+        const proximo = ags.find((a) => a.status !== 'CANCELLED' && parseISO(a.startAt) >= agora);
+        setCurrent(proximo || null);
+      })
+      .catch(() => {});
+  }, []);
+
+  const hasAppointment = current ? true : hasAppointmentFallback;
+
+  const solicitar = async () => {
+    if (!selectedSlot || !current) return;
+    setLoading(true);
+    setErro('');
+    try {
+      // selectedSlot é "HH:MM" — precisa combinar com a data alvo. Aqui, mock: dia seguinte à data atual do agendamento
+      const base = parseISO(current.startAt);
+      const [h, m] = selectedSlot.split(':').map(Number);
+      const proposed = new Date(base);
+      proposed.setDate(proposed.getDate() + 1);
+      proposed.setHours(h, m, 0, 0);
+      await rescheduleService.request(current.id, proposed.toISOString());
+      setSent(true);
+    } catch (err: any) {
+      setErro(err.response?.data?.message || 'Erro ao solicitar');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (!hasAppointment) {
     return (
@@ -95,52 +134,28 @@ export function LuckClientReschedule({ onBack, onSubmit, hasAppointment, onBookN
         }}>
           <div>
             <div style={{ fontSize: 10, color: '#999', fontWeight: 700, letterSpacing: '0.06em' }}>AGENDAMENTO ATUAL</div>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', marginTop: 2 }}>Combo Premium · Qua 29/04 · 14:30</div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', marginTop: 2 }}>
+              {current
+                ? `${current.service.name} · ${format(parseISO(current.startAt), "dd/MM 'às' HH:mm", { locale: ptBR })}`
+                : 'Combo Premium · Qua 29/04 · 14:30'}
+            </div>
           </div>
         </div>
 
-        <div style={{
-          background: 'white', border: '1px solid var(--gray-soft)', borderRadius: 14,
-          padding: '14px 12px', marginBottom: 18,
-        }}>
-          <div className="lk-serif" style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>
-            Abril <em style={{ color: '#999', fontStyle: 'italic' }}>2026</em>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
-            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
-              <div key={i} style={{ textAlign: 'center', fontSize: 9.5, color: '#999', fontWeight: 700 }}>{d}</div>
-            ))}
-            {[null, null, null, null, null].map((_, i) => <div key={i} />)}
-            {[26, 27, 28, 29, 30].map((d) => (
-              <div key={d} style={{
-                aspectRatio: '1', display: 'grid', placeItems: 'center', borderRadius: 8,
-                fontSize: 12, fontWeight: d === 30 ? 700 : 500,
-                background: d === 30 ? 'var(--red)' : d === 27 ? 'var(--bg2)' : 'transparent',
-                color: d === 30 ? 'white' : 'var(--ink)',
-              }}>{d}</div>
-            ))}
-          </div>
-        </div>
-
-        <div className="lk-eyebrow" style={{ fontSize: 9.5, marginBottom: 8 }}>QUINTA · 30 ABRIL · HORÁRIOS</div>
+        <div className="lk-eyebrow" style={{ fontSize: 9.5, marginBottom: 8 }}>ESCOLHA UM HORÁRIO PARA A PRÓXIMA JANELA</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
-          {['08:00', '08:30*', '09:00', '09:30', '10:00', '10:30*', '11:00', '11:30', '13:00', '13:30', '14:00', '14:30*', '15:00', '15:30', '16:00', '16:30'].map((raw) => {
-            const busy = raw.includes('*');
-            const time = raw.replace('*', '');
+          {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'].map((time) => {
             const sel = selectedSlot === time;
             return (
               <button
-                key={raw}
-                disabled={busy}
+                key={time}
                 onClick={() => setSelectedSlot(time)}
                 className="lk-mono"
                 style={{
-                  padding: '10px 0', borderRadius: 8, fontSize: 12, fontWeight: 700,
-                  cursor: busy ? 'not-allowed' : 'pointer',
-                  background: sel ? 'var(--red)' : busy ? 'transparent' : 'var(--bg2)',
-                  color: sel ? 'white' : busy ? '#ccc' : 'var(--ink)',
-                  border: busy ? '1px dashed var(--gray-soft)' : sel ? '1px solid var(--red)' : '1px solid transparent',
-                  textDecoration: busy ? 'line-through' : 'none',
+                  padding: '10px 0', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                  background: sel ? 'var(--red)' : 'var(--bg2)',
+                  color: sel ? 'white' : 'var(--ink)',
+                  border: sel ? '1px solid var(--red)' : '1px solid transparent',
                 }}
               >
                 {time}
@@ -148,14 +163,20 @@ export function LuckClientReschedule({ onBack, onSubmit, hasAppointment, onBookN
             );
           })}
         </div>
+
+        {erro && (
+          <div style={{ marginTop: 12, padding: '10px 14px', background: '#c0392b15', border: '1px solid #c0392b40', borderRadius: 10, fontSize: 11.5, color: 'var(--red)' }}>
+            {erro}
+          </div>
+        )}
       </div>
       <LuckFooter>
         <LuckCTA
-          disabled={!selectedSlot}
-          onClick={() => setSent(true)}
+          disabled={!selectedSlot || loading}
+          onClick={solicitar}
           icon={selectedSlot ? <IconArrow size={17} color="white" strokeWidth={2} /> : null}
         >
-          {selectedSlot ? 'SOLICITAR ALTERAÇÃO' : 'ESCOLHA UM HORÁRIO'}
+          {loading ? 'ENVIANDO…' : selectedSlot ? 'SOLICITAR ALTERAÇÃO' : 'ESCOLHA UM HORÁRIO'}
         </LuckCTA>
       </LuckFooter>
     </div>

@@ -32,7 +32,7 @@ export class AppointmentsController {
   @UseGuards(JwtAuthGuard)
   @Post()
   criar(@CurrentUser() user: any, @Body() dto: CreateAppointmentDto) {
-    return this.appointmentsService.criar(user.id, dto);
+    return this.appointmentsService.criar(user.id, dto, user.role);
   }
 
   @ApiBearerAuth()

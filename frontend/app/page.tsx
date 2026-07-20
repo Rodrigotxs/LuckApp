@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import {
-  LuckSplash, LuckRolePicker, LuckLogin,
+  LuckSplash, LuckRolePicker, LuckLogin, LuckOwnerOTP,
   LuckUnitPicker, LuckClientSignup, LuckClientOTP, LuckClientDone,
   LuckClientServices, LuckClientBarberPicker, LuckClientSchedule, LuckClientConfirm,
   LuckClientHome, LuckClientReschedule,
@@ -12,9 +12,10 @@ import {
   LuckProfile,
 } from '@/components/screens';
 import { LUCK_BARBERS, LUCK_SERVICES } from '@/components/screens/data';
+import { salvarSessao, encerrarSessao } from '@/lib/auth';
 
 type Step =
-  | 'splash' | 'role' | 'login'
+  | 'splash' | 'role' | 'login' | 'owner-otp'
   | 'c-unit' | 'c-signup' | 'c-otp' | 'c-done'
   | 'c-services' | 'c-barber' | 'c-schedule' | 'c-confirm'
   | 'c-home' | 'c-reschedule' | 'c-profile'
@@ -33,6 +34,7 @@ export default function LuckApp() {
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [ownerOtpWhatsapp, setOwnerOtpWhatsapp] = useState('');
 
   const barber = useMemo(() => LUCK_BARBERS.find((b) => b.id === selectedBarberId), [selectedBarberId]);
   const services = useMemo(() => LUCK_SERVICES.filter((s) => selectedServiceIds.includes(s.id)), [selectedServiceIds]);
@@ -41,8 +43,7 @@ export default function LuckApp() {
 
   const goto = (s: Step) => setStep(s);
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    encerrarSessao();
     setClientLoggedIn(false);
     goto('role');
   };
@@ -63,6 +64,19 @@ export default function LuckApp() {
           onEnter={(role) => {
             if (role === 'client') setClientLoggedIn(true);
             goto(role === 'client' ? 'c-home' : 'o-dashboard');
+          }}
+          onOwnerOtpSent={(wa) => { setOwnerOtpWhatsapp(wa); goto('owner-otp'); }}
+          onClientOtpSent={() => goto('c-otp')}
+        />
+      );
+    case 'owner-otp':
+      return (
+        <LuckOwnerOTP
+          whatsapp={ownerOtpWhatsapp}
+          onBack={() => goto('login')}
+          onSuccess={(data) => {
+            salvarSessao(data.token, { ...data.owner, role: 'owner' });
+            goto('o-dashboard');
           }}
         />
       );
@@ -92,7 +106,7 @@ export default function LuckApp() {
           onBack={() => goto('c-signup')}
           onNext={() => {
             setClientLoggedIn(true);
-            goto('c-done');
+            goto(clientLoggedIn ? 'c-home' : 'c-done');
           }}
           method={signupMethod}
         />

@@ -22,7 +22,9 @@ export class AppointmentsService {
     private loyalty: LoyaltyService,
   ) {}
 
-  async criar(clientId: string, dto: CreateAppointmentDto) {
+  async criar(callerId: string, dto: CreateAppointmentDto, callerRole?: 'client' | 'owner') {
+    // Se dono criando em nome de outro cliente, usa dto.clientId; senão o próprio caller
+    const clientId = callerRole === 'owner' && dto.clientId ? dto.clientId : callerId;
     const service = await this.prisma.service.findFirst({
       where: { id: dto.serviceId, ownerId: dto.ownerId, active: true },
     });

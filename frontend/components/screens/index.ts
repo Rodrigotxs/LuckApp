@@ -1,6 +1,7 @@
 export { LuckSplash } from './LuckSplash';
 export { LuckRolePicker } from './LuckRolePicker';
 export { LuckLogin } from './LuckLogin';
+export { LuckOwnerOTP } from './LuckOwnerOTP';
 export { LuckUnitPicker } from './LuckUnitPicker';
 export { LuckClientSignup } from './LuckClientSignup';
 export { LuckClientOTP } from './LuckClientOTP';

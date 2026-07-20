@@ -3,47 +3,58 @@
 import { useState } from 'react';
 import { LuckHeader, LuckField, LuckCTA, LuckFooter, LuckSocialButtons } from '../luck';
 import { IconArrow, IconWhatsapp } from '../icons/Icons';
-import { api } from '@/lib/api';
+import { authService } from '@/lib/services';
+import { salvarSessao } from '@/lib/auth';
+
+type Role = 'client' | 'owner';
+type Method = 'email' | 'whatsapp';
 
 interface Props {
   onBack: () => void;
-  onEnter: (role: 'client' | 'owner') => void;
+  onEnter: (role: Role) => void;
+  /** Chamado quando o dono precisa ir para tela de OTP após envio */
+  onOwnerOtpSent?: (whatsapp: string) => void;
+  /** Chamado quando cliente pede OTP (mesmo fluxo de cadastro) */
+  onClientOtpSent?: () => void;
 }
 
-export function LuckLogin({ onBack, onEnter }: Props) {
-  const [role, setRole] = useState<'client' | 'owner'>('client');
-  const [method, setMethod] = useState<'email' | 'whatsapp'>('email');
+export function LuckLogin({ onBack, onEnter, onOwnerOtpSent, onClientOtpSent }: Props) {
+  const [role, setRole] = useState<Role>('client');
+  const [method, setMethod] = useState<Method>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  const [mensagem, setMensagem] = useState('');
 
   const roleColor = role === 'client' ? 'var(--red)' : 'var(--navy)';
 
   const entrar = async () => {
     setErro('');
+    setMensagem('');
     setLoading(true);
     try {
       if (role === 'owner') {
-        const { data } = await api.post('/auth/owner/login', { email, password });
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify({ ...data.owner, role: 'owner' }));
-        onEnter('owner');
-      } else {
-        // cliente: envia OTP para o WhatsApp
-        const wa = whatsapp.replace(/\D/g, '');
-        if (wa.length < 11) {
-          setErro('WhatsApp deve ter pelo menos 11 dígitos (com DDD)');
-          setLoading(false);
-          return;
+        if (method === 'email') {
+          const data = await authService.loginOwner(email, password);
+          salvarSessao(data.token, { ...data.owner, role: 'owner' });
+          onEnter('owner');
+        } else {
+          const wa = whatsapp.replace(/\D/g, '');
+          if (wa.length < 11) { setErro('WhatsApp deve ter 11 dígitos'); return; }
+          await authService.sendOwnerOtp(wa);
+          onOwnerOtpSent?.(wa);
         }
-        await api.post('/auth/client/send-otp', { name: 'Cliente Luck', whatsapp: wa });
+      } else {
+        // Cliente sempre por OTP WhatsApp
+        const wa = whatsapp.replace(/\D/g, '');
+        if (wa.length < 11) { setErro('WhatsApp deve ter 11 dígitos'); return; }
+        await authService.sendClientOtp('Cliente Luck', wa);
         sessionStorage.setItem('cadastro_whatsapp', wa);
         sessionStorage.setItem('cadastro_nome', 'Cliente Luck');
-        // Deixa o LuckApp saber que precisa ir pra tela de OTP
-        onEnter('client');
+        onClientOtpSent?.();
       }
     } catch (err: any) {
       setErro(err.response?.data?.message || 'Erro ao entrar. Verifique seus dados.');
@@ -52,16 +63,34 @@ export function LuckLogin({ onBack, onEnter }: Props) {
     }
   };
 
+  const esqueciSenha = async () => {
+    if (role !== 'owner') return;
+    const payload: any = method === 'email' ? { email } : { whatsapp: whatsapp.replace(/\D/g, '') };
+    try {
+      await authService.requestOwnerPasswordReset(payload);
+      setResetSent(true);
+      setMensagem('Se a conta existir, você receberá um link em breve.');
+    } catch {
+      setResetSent(true); // Sempre "sucesso" para não vazar existência de conta
+    }
+  };
+
+  const podeSubmit =
+    role === 'client'
+      ? whatsapp.length >= 11
+      : method === 'email'
+        ? email.length > 0 && password.length > 0
+        : whatsapp.replace(/\D/g, '').length >= 11;
+
   return (
     <div className="lk-screen">
       <LuckHeader onBack={onBack} />
-      <div className="lk-scroll" style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 120px' }}>
+      <div className="lk-scroll" style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 140px' }}>
         <div className="lk-eyebrow" style={{ marginTop: 8 }}>JÁ TENHO CONTA</div>
         <div className="lk-serif" style={{ fontSize: 26, fontWeight: 800, marginBottom: 18 }}>
           Entrar na <em style={{ color: 'var(--red)', fontStyle: 'italic' }}>conta</em>
         </div>
 
-        {/* Role toggle */}
         <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 10, padding: 4, marginBottom: 12 }}>
           <button onClick={() => setRole('client')} style={{
             flex: 1, padding: '9px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
@@ -75,8 +104,7 @@ export function LuckLogin({ onBack, onEnter }: Props) {
           }}>FUNCIONÁRIO</button>
         </div>
 
-        {/* Method toggle */}
-        {role === 'owner' ? null : (
+        {role === 'owner' && (
           <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 10, padding: 4, marginBottom: 20 }}>
             <button onClick={() => setMethod('email')} style={{
               flex: 1, padding: '9px 0', borderRadius: 7, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
@@ -88,36 +116,38 @@ export function LuckLogin({ onBack, onEnter }: Props) {
               background: method === 'whatsapp' ? roleColor : 'transparent', color: method === 'whatsapp' ? 'white' : '#888',
               fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>
-              <IconWhatsapp size={13} color={method === 'whatsapp' ? 'white' : '#888'} />
-              WHATSAPP
+              <IconWhatsapp size={13} color={method === 'whatsapp' ? 'white' : '#888'} />WHATSAPP
             </button>
           </div>
         )}
 
         <LuckSocialButtons />
 
-        {role === 'owner' ? (
-          <>
-            <LuckField label="E-mail" value={email} onChange={setEmail} editable state={email ? 'filled' : 'focus'} />
-            <LuckField label="Senha" value={password} onChange={setPassword} editable type="password" state={password ? 'filled' : 'idle'} />
-          </>
-        ) : method === 'email' ? (
-          <>
-            <LuckField label="E-mail" value={email} onChange={setEmail} editable state={email ? 'filled' : 'focus'} />
-            <LuckField label="Senha" value={password} onChange={setPassword} editable type="password" state={password ? 'filled' : 'idle'} />
-          </>
+        {role === 'client' || method === 'whatsapp' ? (
+          <LuckField label="WhatsApp" value={whatsapp} onChange={setWhatsapp} editable state={whatsapp ? 'filled' : 'focus'} mono help="Enviaremos um código por WhatsApp" />
         ) : (
-          <LuckField label="WhatsApp" value={whatsapp} onChange={setWhatsapp} editable state={whatsapp ? 'filled' : 'focus'} mono help="Enviaremos um código via WhatsApp" />
+          <>
+            <LuckField label="E-mail" value={email} onChange={setEmail} editable state={email ? 'filled' : 'focus'} />
+            <LuckField label="Senha" value={password} onChange={setPassword} editable type="password" state={password ? 'filled' : 'idle'} />
+          </>
         )}
 
-        <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6 }}>
-          <button
-            onClick={() => setResetSent(true)}
-            style={{ background: 'none', border: 'none', padding: 0, fontSize: 11, color: roleColor, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-          >
-            {resetSent ? 'Link enviado ✓' : 'Esqueci minha senha'}
-          </button>
-        </div>
+        {role === 'owner' && (
+          <div style={{ textAlign: 'right', marginTop: -6, marginBottom: 6 }}>
+            <button
+              onClick={esqueciSenha}
+              style={{ background: 'none', border: 'none', padding: 0, fontSize: 11, color: roleColor, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              {resetSent ? 'Link enviado ✓' : 'Esqueci minha senha'}
+            </button>
+          </div>
+        )}
+
+        {mensagem && (
+          <div style={{ marginTop: 8, padding: '10px 14px', background: '#4caf5015', border: '1px solid #4caf5040', borderRadius: 10, fontSize: 11.5, color: '#2e7d32' }}>
+            {mensagem}
+          </div>
+        )}
 
         {erro && (
           <div style={{ marginTop: 8, padding: '10px 14px', background: '#c0392b15', border: '1px solid #c0392b40', borderRadius: 10, fontSize: 11.5, color: 'var(--red)' }}>
@@ -135,10 +165,10 @@ export function LuckLogin({ onBack, onEnter }: Props) {
         <LuckCTA
           variant={role === 'owner' ? 'navy' : 'primary'}
           onClick={entrar}
-          disabled={loading}
+          disabled={loading || !podeSubmit}
           icon={<IconArrow size={17} color="white" strokeWidth={2} />}
         >
-          {loading ? 'ENTRANDO…' : 'ENTRAR'}
+          {loading ? 'ENTRANDO…' : role === 'client' || method === 'whatsapp' ? 'ENVIAR CÓDIGO' : 'ENTRAR'}
         </LuckCTA>
       </LuckFooter>
     </div>
