@@ -46,3 +46,19 @@ export async function sendClientEmailOtp(name: string, email: string) {
 export async function verifyClientEmailOtp(email: string, code: string) {
   return (await api.post('/auth/client/verify-email-otp', { email, code })).data;
 }
+
+export async function loginClient(input: { email?: string; whatsapp?: string; password: string }) {
+  return (await api.post('/auth/client/login', input)).data;
+}
+
+export async function setClientPassword(password: string) {
+  return (await api.post('/auth/client/set-password', { password })).data;
+}
+
+export async function requestClientPasswordReset(input: { email?: string; whatsapp?: string }) {
+  return (await api.post('/auth/client/password-reset/request', input)).data;
+}
+
+export async function confirmClientPasswordReset(token: string, newPassword: string) {
+  return (await api.post('/auth/client/password-reset/confirm', { token, newPassword })).data;
+}

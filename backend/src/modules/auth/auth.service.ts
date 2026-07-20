@@ -16,6 +16,10 @@ import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { SendOwnerOtpDto, VerifyOwnerOtpDto } from './dto/owner-otp.dto';
 import { RequestPasswordResetDto, ConfirmPasswordResetDto } from './dto/password-reset.dto';
+import {
+  LoginClientDto, SetClientPasswordDto,
+  RequestClientPasswordResetDto, ConfirmClientPasswordResetDto,
+} from './dto/client-password.dto';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -166,6 +170,91 @@ export class AuthService {
 
     const token = this.gerarToken(client.id, 'client');
     return { token, client: { id: client.id, name: client.name, email: client.email } };
+  }
+
+  // ─── Login do cliente com senha (paridade com o dono) ────────────
+  async loginCliente(dto: LoginClientDto) {
+    if (!dto.email && !dto.whatsapp) {
+      throw new BadRequestException('Informe email ou whatsapp');
+    }
+    const client = await this.prisma.client.findFirst({
+      where: {
+        OR: [
+          ...(dto.email ? [{ email: dto.email }] : []),
+          ...(dto.whatsapp ? [{ whatsapp: dto.whatsapp }] : []),
+        ],
+      },
+    });
+    if (!client) throw new UnauthorizedException('Credenciais inválidas');
+    if (!client.passwordHash) {
+      throw new UnauthorizedException('Esta conta não tem senha. Entre pelo código enviado por WhatsApp/e-mail.');
+    }
+    const senhaValida = await bcrypt.compare(dto.password, client.passwordHash);
+    if (!senhaValida) throw new UnauthorizedException('Credenciais inválidas');
+
+    const token = this.gerarToken(client.id, 'client');
+    return { token, client: { id: client.id, name: client.name, whatsapp: client.whatsapp, email: client.email } };
+  }
+
+  /** Cliente logado define/altera sua senha (para depois entrar sem OTP). */
+  async definirSenhaCliente(clientId: string, dto: SetClientPasswordDto) {
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    await this.prisma.client.update({ where: { id: clientId }, data: { passwordHash } });
+    return { message: 'Senha definida com sucesso' };
+  }
+
+  async solicitarResetSenhaCliente(dto: RequestClientPasswordResetDto) {
+    if (!dto.email && !dto.whatsapp) {
+      throw new BadRequestException('Informe email ou whatsapp');
+    }
+    const client = await this.prisma.client.findFirst({
+      where: {
+        OR: [
+          ...(dto.email ? [{ email: dto.email }] : []),
+          ...(dto.whatsapp ? [{ whatsapp: dto.whatsapp }] : []),
+        ],
+      },
+    });
+    if (!client) return { message: 'Se a conta existir, você receberá um link em breve.' };
+
+    const token = crypto.randomBytes(24).toString('hex');
+    const expira = new Date(Date.now() + 60 * 60 * 1000);
+    await this.prisma.client.update({
+      where: { id: client.id },
+      data: { passwordResetToken: token, passwordResetExpires: expira },
+    });
+
+    const linkBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const link = `${linkBase}/reset?token=${token}`;
+    try {
+      if (client.email) {
+        await this.email.enviarResetSenha(client.email, link);
+      } else if (!client.whatsapp.startsWith('email:')) {
+        await this.whatsapp.notificar(
+          client.whatsapp,
+          `🔐 *Redefinir senha — Barbearia Luck*\n\nToque no link (válido por 1 h): ${link}`,
+        );
+      }
+    } catch {}
+
+    return { message: 'Se a conta existir, você receberá um link em breve.' };
+  }
+
+  async confirmarResetSenhaCliente(dto: ConfirmClientPasswordResetDto) {
+    const client = await this.prisma.client.findFirst({
+      where: {
+        passwordResetToken: dto.token,
+        passwordResetExpires: { gt: new Date() },
+      },
+    });
+    if (!client) throw new BadRequestException('Token inválido ou expirado');
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+    await this.prisma.client.update({
+      where: { id: client.id },
+      data: { passwordHash, passwordResetToken: null, passwordResetExpires: null },
+    });
+    return { message: 'Senha atualizada com sucesso' };
   }
 
   // ─── OTP do dono (login via WhatsApp) ─────────────────────────────

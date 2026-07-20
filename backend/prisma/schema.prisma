@@ -80,6 +80,7 @@ model Client {
   name                 String
   whatsapp             String              @unique
   email                String?
+  passwordHash         String?
   otpCode              String?
   otpExpiresAt         DateTime?
   // OTP separado por e-mail (permite mudar canal)
