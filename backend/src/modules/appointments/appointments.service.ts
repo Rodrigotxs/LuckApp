@@ -124,6 +124,27 @@ export class AppointmentsService {
 
   async atualizarStatus(ownerId: string, id: string, dto: UpdateStatusDto) {
     await this.verificarPropriedadeOwner(ownerId, id);
+
+    // Se está cancelando, limpar Google Calendar antes de gravar o novo status
+    if (dto.status === 'CANCELLED') {
+      const anterior = await this.prisma.appointment.findUnique({
+        where: { id },
+        include: { owner: true },
+      });
+      if (anterior?.googleEventId && anterior.owner.googleAccessToken && anterior.owner.googleRefreshToken) {
+        try {
+          await this.googleCalendar.deletarEvento(
+            anterior.owner.googleAccessToken,
+            anterior.owner.googleRefreshToken,
+            anterior.owner.id,
+            anterior.googleEventId,
+          );
+        } catch {
+          // Falha silenciosa — evento pode já ter sido removido
+        }
+      }
+    }
+
     const updated = await this.prisma.appointment.update({
       where: { id },
       data: { status: dto.status },

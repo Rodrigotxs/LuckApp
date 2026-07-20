@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { format, parseISO } from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval,
+  isSameDay, isBefore, startOfDay, addDays,
+} from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { LuckHeader, LuckCTA, LuckFooter } from '../luck';
 import { IconArrow, IconCalendar, IconClock } from '../icons/Icons';
@@ -16,11 +19,18 @@ interface Props {
 }
 
 export function LuckClientReschedule({ onBack, onSubmit, hasAppointment: hasAppointmentFallback, onBookNew }: Props) {
+  const hoje = useMemo(() => startOfDay(new Date()), []);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<Date>(addDays(hoje, 1));
   const [sent, setSent] = useState(false);
   const [current, setCurrent] = useState<Appointment | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+
+  const monthStart = startOfMonth(hoje);
+  const monthEnd = endOfMonth(hoje);
+  const dias = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const firstDow = monthStart.getDay();
 
   useEffect(() => {
     appointmentsService.listClient()
@@ -39,12 +49,14 @@ export function LuckClientReschedule({ onBack, onSubmit, hasAppointment: hasAppo
     setLoading(true);
     setErro('');
     try {
-      // selectedSlot é "HH:MM" — precisa combinar com a data alvo. Aqui, mock: dia seguinte à data atual do agendamento
-      const base = parseISO(current.startAt);
       const [h, m] = selectedSlot.split(':').map(Number);
-      const proposed = new Date(base);
-      proposed.setDate(proposed.getDate() + 1);
+      const proposed = new Date(selectedDay);
       proposed.setHours(h, m, 0, 0);
+      if (proposed <= new Date()) {
+        setErro('Escolha um horário no futuro');
+        setLoading(false);
+        return;
+      }
       await rescheduleService.request(current.id, proposed.toISOString());
       setSent(true);
     } catch (err: any) {
@@ -142,7 +154,47 @@ export function LuckClientReschedule({ onBack, onSubmit, hasAppointment: hasAppo
           </div>
         </div>
 
-        <div className="lk-eyebrow" style={{ fontSize: 9.5, marginBottom: 8 }}>ESCOLHA UM HORÁRIO PARA A PRÓXIMA JANELA</div>
+        {/* Mini-calendário do mês */}
+        <div style={{
+          background: 'white', border: '1px solid var(--gray-soft)', borderRadius: 14,
+          padding: '14px 12px', marginBottom: 14,
+        }}>
+          <div className="lk-serif" style={{ fontWeight: 700, fontSize: 15, marginBottom: 10, textTransform: 'capitalize' }}>
+            {format(monthStart, 'MMMM', { locale: ptBR })}{' '}
+            <em style={{ color: '#999', fontStyle: 'italic' }}>{format(monthStart, 'yyyy')}</em>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 3 }}>
+            {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d, i) => (
+              <div key={i} style={{ textAlign: 'center', fontSize: 9.5, color: '#999', fontWeight: 700 }}>{d}</div>
+            ))}
+            {Array(firstDow).fill(null).map((_, i) => <div key={`e${i}`} />)}
+            {dias.map((day) => {
+              const d = day.getDate();
+              const isPast = isBefore(day, hoje);
+              const isSel = isSameDay(day, selectedDay);
+              const isToday = isSameDay(day, hoje);
+              return (
+                <button
+                  key={day.toISOString()}
+                  disabled={isPast}
+                  onClick={() => setSelectedDay(day)}
+                  style={{
+                    aspectRatio: '1', border: 'none', borderRadius: 8,
+                    cursor: isPast ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                    fontSize: 12, fontWeight: isSel ? 700 : 500,
+                    background: isSel ? 'var(--red)' : isToday ? 'var(--bg2)' : 'transparent',
+                    color: isSel ? 'white' : isPast ? '#ccc' : 'var(--ink)',
+                    opacity: isPast ? 0.4 : 1,
+                  }}
+                >{d}</button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="lk-eyebrow" style={{ fontSize: 9.5, marginBottom: 8, textTransform: 'uppercase' }}>
+          {format(selectedDay, "EEEE · dd 'de' MMMM", { locale: ptBR })} · HORÁRIOS
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
           {['08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30'].map((time) => {
             const sel = selectedSlot === time;

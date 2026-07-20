@@ -22,9 +22,11 @@ interface Props {
   selectedIds: string[];
   toggleSelected: (id: string) => void;
   onNext: () => void;
+  /** Notifica o wrapper com os serviços carregados do backend (para propagar aos próximos passos). */
+  onServicesLoaded?: (servicos: Array<{ id: string; name: string; duration: number; price: number; icon: string }>) => void;
 }
 
-export function LuckClientServices({ ownerId, onBack, selectedIds, toggleSelected, onNext }: Props) {
+export function LuckClientServices({ ownerId, onBack, selectedIds, toggleSelected, onNext, onServicesLoaded }: Props) {
   const [servicos, setServicos] = useState<Servico[]>(LUCK_SERVICES);
 
   useEffect(() => {
@@ -32,21 +34,21 @@ export function LuckClientServices({ ownerId, onBack, selectedIds, toggleSelecte
       api.get(`/services/public/${ownerId}`)
         .then(({ data }) => {
           if (data.length) {
-            setServicos(
-              data.map((s: any) => ({
-                id: s.id,
-                name: s.name,
-                desc: s.description || '',
-                duration: s.durationMin,
-                price: s.price,
-                icon: 'IconScissors',
-              }))
-            );
+            const mapped = data.map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              desc: s.description || '',
+              duration: s.durationMin,
+              price: s.price,
+              icon: 'IconScissors',
+            }));
+            setServicos(mapped);
+            onServicesLoaded?.(mapped);
           }
         })
         .catch(() => {});
     }
-  }, [ownerId]);
+  }, [ownerId, onServicesLoaded]);
 
   return (
     <div className="lk-screen">

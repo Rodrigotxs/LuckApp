@@ -20,6 +20,18 @@ export class OwnersService {
     return { ...safe, googleConnected: Boolean(owner.googleAccessToken && owner.googleRefreshToken) };
   }
 
+  /**
+   * Retorna o primeiro dono cadastrado — usado pela SPA quando não há link
+   * público específico (`/agendar/:ownerId`). Só expõe dados públicos.
+   */
+  async findDefaultPublic() {
+    const owner = await this.prisma.owner.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, name: true, barbershopName: true, barbershopAddress: true },
+    });
+    return owner;
+  }
+
   async update(id: string, dto: UpdateOwnerDto) {
     const owner = await this.prisma.owner.update({ where: { id }, data: dto });
     const {

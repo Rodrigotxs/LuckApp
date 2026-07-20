@@ -25,3 +25,15 @@ export async function getGoogleAuthUrl(): Promise<string> {
   const res = await api.get('/auth/google/url');
   return res.data.url;
 }
+
+export interface OwnerPublic {
+  id: string;
+  name: string;
+  barbershopName: string;
+  barbershopAddress?: string;
+}
+
+export async function getDefaultPublic(): Promise<OwnerPublic | null> {
+  const res = await api.get('/owners/public/default');
+  return res.data;
+}

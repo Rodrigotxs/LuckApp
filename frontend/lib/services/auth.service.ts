@@ -7,6 +7,8 @@ export async function registerOwner(data: {
   whatsapp: string;
   barbershopName: string;
   barbershopAddress?: string;
+  zipCode?: string;
+  unitId?: string;
 }) {
   return (await api.post('/auth/owner/register', data)).data;
 }

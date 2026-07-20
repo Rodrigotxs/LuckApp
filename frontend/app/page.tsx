@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   LuckSplash, LuckRolePicker, LuckLogin, LuckOwnerOTP,
   LuckUnitPicker, LuckClientSignup, LuckClientOTP, LuckClientDone,
@@ -14,6 +14,7 @@ import {
 } from '@/components/screens';
 import { LUCK_BARBERS, LUCK_SERVICES } from '@/components/screens/data';
 import { salvarSessao, encerrarSessao } from '@/lib/auth';
+import { ownerService, appointmentsService } from '@/lib/services';
 
 type Step =
   | 'splash' | 'role' | 'login' | 'owner-otp'
@@ -31,14 +32,48 @@ export default function LuckApp() {
   const [ownerUnitId, setOwnerUnitId] = useState<string | null>(null);
   const [signupMethod, setSignupMethod] = useState<'whatsapp' | 'email'>('whatsapp');
   const [clientLoggedIn, setClientLoggedIn] = useState(false);
-  const [hasAppointment, setHasAppointment] = useState(true);
+  const [hasAppointment, setHasAppointment] = useState(false);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [ownerOtpWhatsapp, setOwnerOtpWhatsapp] = useState('');
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const [servicosBackend, setServicosBackend] = useState<Array<{ id: string; name: string; duration: number; price: number; icon: string }>>([]);
+
+  // Busca o dono padrão (primeiro cadastrado) para popular sessionStorage
+  useEffect(() => {
+    ownerService.getDefaultPublic()
+      .then((o) => {
+        if (o?.id) {
+          setOwnerId(o.id);
+          sessionStorage.setItem('agendar_ownerId', o.id);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Sempre que entrar na home do cliente logado, atualiza hasAppointment
+  useEffect(() => {
+    if (step !== 'c-home' || !clientLoggedIn) return;
+    appointmentsService.listClient()
+      .then((ags) => {
+        const agora = new Date();
+        const futuros = ags.filter((a) => a.status !== 'CANCELLED' && new Date(a.startAt) >= agora);
+        setHasAppointment(futuros.length > 0);
+      })
+      .catch(() => setHasAppointment(false));
+  }, [step, clientLoggedIn]);
 
   const barber = useMemo(() => LUCK_BARBERS.find((b) => b.id === selectedBarberId), [selectedBarberId]);
-  const services = useMemo(() => LUCK_SERVICES.filter((s) => selectedServiceIds.includes(s.id)), [selectedServiceIds]);
+  // services: prefere os do backend; fallback aos mocks
+  const services = useMemo(() => {
+    if (servicosBackend.length > 0) {
+      return servicosBackend
+        .filter((s) => selectedServiceIds.includes(s.id))
+        .map((s) => ({ id: s.id, name: s.name, desc: '', duration: s.duration, price: s.price, icon: s.icon as any }));
+    }
+    return LUCK_SERVICES.filter((s) => selectedServiceIds.includes(s.id));
+  }, [selectedServiceIds, servicosBackend]);
   const toggleService = (id: string) =>
     setSelectedServiceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
@@ -86,6 +121,7 @@ export default function LuckApp() {
     case 'c-unit':
       return (
         <LuckUnitPicker
+          ownerId={ownerId || undefined}
           onBack={() => goto(clientLoggedIn ? 'c-home' : 'role')}
           selectedUnitId={selectedUnitId}
           setSelectedUnitId={setSelectedUnitId}
@@ -117,15 +153,18 @@ export default function LuckApp() {
     case 'c-services':
       return (
         <LuckClientServices
+          ownerId={ownerId || undefined}
           onBack={() => goto(clientLoggedIn ? 'c-unit' : 'c-done')}
           selectedIds={selectedServiceIds}
           toggleSelected={toggleService}
+          onServicesLoaded={setServicosBackend}
           onNext={() => goto('c-barber')}
         />
       );
     case 'c-barber':
       return (
         <LuckClientBarberPicker
+          ownerId={ownerId || undefined}
           onBack={() => goto('c-services')}
           selectedUnitId={selectedUnitId}
           selectedBarberId={selectedBarberId}
@@ -153,6 +192,12 @@ export default function LuckApp() {
           barber={barber}
           confirmed={confirmed}
           onConfirm={() => setConfirmed(true)}
+          onDone={() => {
+            setConfirmed(false);
+            setSelectedServiceIds([]);
+            setSelectedSlot(null);
+            goto(clientLoggedIn ? 'c-home' : 'role');
+          }}
         />
       );
 

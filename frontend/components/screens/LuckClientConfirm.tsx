@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LuckHeader, LuckCTA, LuckFooter } from '../luck';
 import { IconWhatsapp } from '../icons/Icons';
 import { LuckService, LuckBarber } from './data';
@@ -15,6 +15,7 @@ interface Props {
   barber?: LuckBarber;
   confirmed: boolean;
   onConfirm: () => void;
+  onDone?: () => void;
 }
 
 interface RowProps { label: string; value: string; accent?: boolean; }
@@ -26,16 +27,18 @@ const Row = ({ label, value, accent }: RowProps) => (
   </div>
 );
 
-export function LuckClientConfirm({ onBack, services, slot, barber, confirmed, onConfirm }: Props) {
+export function LuckClientConfirm({ onBack, services, slot, barber, confirmed, onConfirm, onDone }: Props) {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
+  // sessionStorage é acessado só depois de montar (evita hydration mismatch)
+  const [dataSelecionada, setDataSelecionada] = useState<string>('');
+  useEffect(() => {
+    setDataSelecionada(sessionStorage.getItem('agendar_data') || format(new Date(), 'yyyy-MM-dd'));
+  }, []);
+
   const totalPrice = services.reduce((sum, s) => sum + s.price, 0);
   const totalDuration = services.reduce((sum, s) => sum + s.duration, 0);
 
-  const dataSelecionada =
-    typeof window !== 'undefined'
-      ? sessionStorage.getItem('agendar_data') || format(new Date(), 'yyyy-MM-dd')
-      : format(new Date(), 'yyyy-MM-dd');
   const dataFmt = dataSelecionada && slot
     ? format(parseISO(`${dataSelecionada}T00:00:00`), "EEEE · dd 'de' MMMM", { locale: ptBR })
     : '—';
@@ -84,9 +87,22 @@ export function LuckClientConfirm({ onBack, services, slot, barber, confirmed, o
             <div className="lk-serif" style={{ fontSize: 22, fontWeight: 800, textAlign: 'center' }}>
               Agendamento<br />enviado!
             </div>
-            <div style={{ fontSize: 12, color: '#888', textAlign: 'center', marginTop: 8 }}>
+            <div style={{ fontSize: 12, color: '#888', textAlign: 'center', marginTop: 8, marginBottom: 24 }}>
               Aguarde a confirmação da barbearia pelo WhatsApp.
             </div>
+            {onDone && (
+              <button
+                onClick={onDone}
+                className="lk-press"
+                style={{
+                  padding: '11px 22px', borderRadius: 10, border: 'none',
+                  background: 'var(--red)', color: 'white', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.05em',
+                }}
+              >
+                VOLTAR AO INÍCIO
+              </button>
+            )}
           </div>
         ) : (
           <>
