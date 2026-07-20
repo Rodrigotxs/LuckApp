@@ -28,6 +28,13 @@ Sistema de agendamento multi-tenant, multi-unidade, com barbeiros individuais. B
 | `integrations/google-calendar` | OAuth + sincronização de eventos |
 | `integrations/whatsapp` | Envio de OTP/confirmação/lembrete + cron 1 h antes |
 
+## Documentação
+
+- 📘 **[Guia de Desenvolvimento (PDF)](docs/GUIA-DEV.pdf)** — setup completo, fluxo dev, comandos, troubleshooting
+- 📄 **[SIMULAR.md](SIMULAR.md)** — passo a passo para rodar tudo local + checklist de smoke tests
+- 🧪 **[scripts/dev.sh](scripts/dev.sh)** — script único para preparar Docker + backend + frontend (Git Bash / macOS / Linux)
+- 🌐 **Swagger** — `http://localhost:3001/api/docs` quando o backend está rodando
+
 ## Modelo de dados (diagrama simplificado)
 
 ```

@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Barbearia Luck — Guia de Desenvolvimento</title>
+<style>
+  @page { size: A4; margin: 18mm 15mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: #2C2C2C;
+    line-height: 1.5;
+    font-size: 10.5pt;
+    margin: 0;
+  }
+  h1 {
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 26pt;
+    color: #1A3A6B;
+    margin: 0 0 4px;
+    letter-spacing: -0.02em;
+  }
+  h1 em {
+    font-family: "Dancing Script", cursive;
+    font-style: normal;
+    color: #C0392B;
+    font-weight: 700;
+    font-size: 32pt;
+    line-height: 0.8;
+  }
+  h2 {
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 15pt;
+    color: #1A3A6B;
+    margin: 22px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #C0392B;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 12pt;
+    color: #2C2C2C;
+    margin: 14px 0 6px;
+    page-break-after: avoid;
+  }
+  h4 { font-size: 10.5pt; color: #1A3A6B; margin: 10px 0 4px; }
+  p { margin: 4px 0 8px; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 9pt;
+    background: #F5F5F5;
+    color: #C0392B;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid #E8E8E8;
+  }
+  pre {
+    background: #1A3A6B;
+    color: #F5F5F5;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 8.5pt;
+    line-height: 1.55;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    word-break: break-word;
+    page-break-inside: avoid;
+  }
+  pre code { background: transparent; color: inherit; border: none; padding: 0; }
+  pre .comment { color: #9BB4D6; font-style: italic; }
+  pre .prompt { color: #C0392B; font-weight: 700; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 12px;
+    font-size: 9.5pt;
+    page-break-inside: avoid;
+  }
+  th, td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid #E8E8E8;
+    vertical-align: top;
+  }
+  th {
+    background: #F5F5F5;
+    color: #1A3A6B;
+    font-weight: 700;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 2px solid #1A3A6B;
+  }
+  tr:nth-child(even) td { background: #FAFAFA; }
+  ul, ol { padding-left: 20px; margin: 6px 0 10px; }
+  li { margin: 2px 0; }
+  .cover {
+    text-align: center;
+    padding: 40mm 0 20mm;
+    page-break-after: always;
+  }
+  .cover .logo {
+    width: 90px; height: 90px; border-radius: 50%;
+    background: #F0EEE6; border: 2px solid #1A3A6B;
+    margin: 0 auto 20px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32pt;
+  }
+  .cover .subtitle {
+    font-size: 10pt;
+    letter-spacing: 0.3em;
+    color: #999;
+    margin-top: 8px;
+    text-transform: uppercase;
+  }
+  .cover .doc-title {
+    font-family: "Playfair Display", Georgia, serif;
+    font-size: 22pt;
+    color: #1A3A6B;
+    margin: 40px 0 6px;
+  }
+  .cover .doc-sub {
+    color: #888;
+    font-size: 11pt;
+  }
+  .callout {
+    background: #F5F5F5;
+    border-left: 3px solid #C0392B;
+    padding: 8px 12px;
+    margin: 10px 0;
+    font-size: 9.5pt;
+    border-radius: 0 6px 6px 0;
+    page-break-inside: avoid;
+  }
+  .callout.navy { border-color: #1A3A6B; }
+  .callout.warn { border-color: #d4a017; background: #FCF8E8; }
+  .callout strong { color: #1A3A6B; }
+  .kbd {
+    background: #FFF;
+    border: 1px solid #BDBDBD;
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: monospace;
+    font-size: 9pt;
+    color: #2C2C2C;
+    display: inline-block;
+    line-height: 1.2;
+  }
+  .badge {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-right: 6px;
+  }
+  .badge.red { background: #C0392B; color: white; }
+  .badge.navy { background: #1A3A6B; color: white; }
+  .badge.gray { background: #E8E8E8; color: #666; }
+  hr { border: none; border-top: 1px solid #E8E8E8; margin: 20px 0; }
+  .toc a { color: #1A3A6B; text-decoration: none; }
+  .toc li { margin: 4px 0; }
+  .footer-note {
+    font-size: 8.5pt;
+    color: #999;
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 10px;
+    border-top: 1px solid #E8E8E8;
+  }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo">✂️</div>
+  <h1>BARBEARIA <em>Luck</em></h1>
+  <div class="subtitle">Tradição · Estilo · Precisão</div>
+  <div class="doc-title">Guia de Desenvolvimento Local</div>
+  <div class="doc-sub">Setup, fluxo dev, comandos úteis, troubleshooting</div>
+  <div style="margin-top: 60px; font-size: 9pt; color: #999;">
+    Branch: <code style="font-size:9pt">claude/barbearia-luck-app-LzpRD</code>
+  </div>
+</div>
+
+<h2>1. Setup base (uma vez só)</h2>
+
+<h3>Pré-requisitos</h3>
+<ul>
+  <li><strong>Node.js 20+</strong> — <code>winget install OpenJS.NodeJS.LTS</code></li>
+  <li><strong>Docker Desktop</strong> — <code>winget install Docker.DockerDesktop</code> (com virtualização habilitada na BIOS + WSL 2)</li>
+  <li><strong>Git</strong> — <code>winget install Git.Git</code></li>
+</ul>
+
+<h3>Clonar e preparar</h3>
+<pre><span class="comment"># Clone fora do OneDrive (importante!)</span>
+mkdir C:\projetos
+cd C:\projetos
+git clone https://github.com/Rodrigotxs/LuckApp.git
+cd LuckApp
+git checkout claude/barbearia-luck-app-LzpRD
+
+<span class="comment"># Cria .env do backend a partir do exemplo</span>
+Copy-Item backend\.env.example backend\.env
+
+<span class="comment"># Sobe Postgres + Redis via Docker</span>
+docker compose up -d
+
+<span class="comment"># Backend: instala deps, aplica migrations, faz seed</span>
+cd backend
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npx prisma db seed
+cd ..
+
+<span class="comment"># Frontend: instala deps</span>
+cd frontend
+npm install
+cd ..</pre>
+
+<div class="callout warn">
+  <strong>⚠️ Nunca clone dentro do OneDrive.</strong> O sync corrompe <code>node_modules</code> e <code>.git</code>. Use <code>C:\projetos\</code> ou similar.
+</div>
+
+<h2>2. Rodar o app (dia a dia)</h2>
+
+<p>Você mantém <strong>3 coisas rodando</strong> simultaneamente:</p>
+
+<table>
+  <tr><th>#</th><th>O que</th><th>Onde</th></tr>
+  <tr><td>1</td><td>Docker Desktop (baleia verde na barra)</td><td>Aplicativo</td></tr>
+  <tr><td>2</td><td><code>cd backend && npm run start:dev</code></td><td>PowerShell #1</td></tr>
+  <tr><td>3</td><td><code>cd frontend && npm run dev</code></td><td>PowerShell #2</td></tr>
+</table>
+
+<p>Abra <code>http://localhost:3000</code>. Login demo: <code>demo@barbearialuck.com</code> / <code>123456</code>.</p>
+
+<h3>Endpoints úteis quando estão rodando</h3>
+<table>
+  <tr><th>URL</th><th>Para quê</th></tr>
+  <tr><td><code>http://localhost:3000</code></td><td>App (frontend)</td></tr>
+  <tr><td><code>http://localhost:3001/api/docs</code></td><td>Swagger — testar endpoints do backend</td></tr>
+  <tr><td><code>http://localhost:5555</code></td><td>Prisma Studio (rode <code>npx prisma studio</code> num 3º terminal)</td></tr>
+</table>
+
+<h2>3. Fluxo de alteração — o que fazer a cada tipo de mudança</h2>
+
+<table>
+  <tr>
+    <th style="width: 30%;">Você mudou…</th>
+    <th style="width: 20%;">Precisa reiniciar?</th>
+    <th>O que fazer</th>
+  </tr>
+  <tr>
+    <td>Arquivo <code>.tsx</code> ou <code>.css</code> do <strong>frontend</strong></td>
+    <td><span class="badge gray">Não</span></td>
+    <td>Next.js Fast Refresh recarrega o browser sozinho. Só salvar.</td>
+  </tr>
+  <tr>
+    <td>Arquivo <code>.ts</code> do <strong>backend</strong></td>
+    <td><span class="badge gray">Não</span></td>
+    <td><code>start:dev</code> reinicia sozinho. Espere ver "Nest application successfully started" no log.</td>
+  </tr>
+  <tr>
+    <td><code>package.json</code> (nova lib)</td>
+    <td><span class="badge navy">Sim</span></td>
+    <td><span class="kbd">Ctrl+C</span> no terminal certo → <code>npm install</code> → sobe de novo.</td>
+  </tr>
+  <tr>
+    <td><code>schema.prisma</code></td>
+    <td><span class="badge red">Sim</span></td>
+    <td><span class="kbd">Ctrl+C</span> no backend → <code>npx prisma migrate dev --name "descricao"</code> → <code>npm run start:dev</code>. O migrate dev já regenera o client.</td>
+  </tr>
+  <tr>
+    <td><code>backend\.env</code></td>
+    <td><span class="badge navy">Sim</span></td>
+    <td><span class="kbd">Ctrl+C</span> → <code>npm run start:dev</code>.</td>
+  </tr>
+  <tr>
+    <td><code>frontend\.env.local</code></td>
+    <td><span class="badge navy">Sim</span></td>
+    <td><span class="kbd">Ctrl+C</span> → <code>npm run dev</code>.</td>
+  </tr>
+</table>
+
+<h2>4. Comandos que você vai usar direto</h2>
+
+<h3>Docker</h3>
+<pre>docker ps                                <span class="comment"># o que está rodando</span>
+docker compose up -d                     <span class="comment"># sobe Postgres + Redis</span>
+docker compose logs -f postgres          <span class="comment"># ver logs do banco</span>
+docker compose down                      <span class="comment"># para (mantém dados)</span>
+docker compose down -v                   <span class="comment"># para e ZERA o banco</span></pre>
+
+<h3>Prisma (dentro de <code>backend/</code>)</h3>
+<pre>npx prisma generate                      <span class="comment"># regenera o client TypeScript</span>
+npx prisma migrate dev --name nome       <span class="comment"># cria e aplica migration nova</span>
+npx prisma migrate deploy                <span class="comment"># só aplica migrations existentes</span>
+npx prisma db seed                       <span class="comment"># popula dados demo</span>
+npx prisma studio                        <span class="comment"># UI visual em http://localhost:5555</span></pre>
+
+<h3>Ver e editar dados do banco</h3>
+<pre>npx prisma studio                        <span class="comment"># RECOMENDADO — interface web bonita</span>
+docker exec -it barbearia_luck_db psql -U postgres barbearia_luck  <span class="comment"># SQL direto</span></pre>
+
+<h3>Git</h3>
+<pre>git pull origin claude/barbearia-luck-app-LzpRD  <span class="comment"># baixa atualizações</span>
+git status                                       <span class="comment"># ver mudanças</span>
+git add .
+git commit -m "descrição curta"
+git push                                         <span class="comment"># envia</span></pre>
+
+<h2>5. Trabalhando com o banco (dev)</h2>
+
+<h3>Zerar tudo e recomeçar</h3>
+<pre>docker compose down -v                   <span class="comment"># apaga o volume</span>
+docker compose up -d
+cd backend
+npx prisma migrate deploy
+npx prisma db seed</pre>
+
+<h3>Só refazer o seed (mantém o schema)</h3>
+<pre>npx prisma migrate reset --force         <span class="comment"># zera dados, aplica migrations, roda seed</span></pre>
+
+<div class="callout navy">
+  <strong>Prisma Studio</strong> é ótimo pra testar cenários: você abre o app, cria um agendamento, entra no Studio e vê o registro; edita status pra COMPLETED direto pela UI, volta no app e vê o efeito (ex: pontos de fidelidade subindo).
+</div>
+
+<h2>6. Estrutura do projeto</h2>
+
+<pre>LuckApp/
+├── backend/                    <span class="comment"># NestJS API (porta 3001)</span>
+│   ├── prisma/
+│   │   ├── schema.prisma       <span class="comment"># definição das tabelas</span>
+│   │   ├── migrations/         <span class="comment"># SQL versionado</span>
+│   │   └── seed.ts             <span class="comment"># dados demo</span>
+│   └── src/
+│       └── modules/
+│           ├── auth/           <span class="comment"># JWT + OTP</span>
+│           ├── owners/         <span class="comment"># donos</span>
+│           ├── clients/        <span class="comment"># clientes</span>
+│           ├── units/          <span class="comment"># unidades (filiais)</span>
+│           ├── barbers/        <span class="comment"># barbeiros</span>
+│           ├── services/       <span class="comment"># serviços do dono</span>
+│           ├── appointments/   <span class="comment"># agendamentos + slots</span>
+│           ├── availability/   <span class="comment"># bloqueios de agenda</span>
+│           ├── reschedule/     <span class="comment"># pedidos pendentes</span>
+│           ├── loyalty/        <span class="comment"># fidelidade</span>
+│           ├── financial/      <span class="comment"># resumo, relatório, CSV</span>
+│           └── integrations/   <span class="comment"># google-calendar + whatsapp + email</span>
+│
+├── frontend/                   <span class="comment"># Next.js SPA (porta 3000)</span>
+│   ├── app/
+│   │   └── page.tsx            <span class="comment"># state machine — todas as telas</span>
+│   ├── components/
+│   │   ├── luck/               <span class="comment"># design system (Header, CTA, Field...)</span>
+│   │   ├── icons/              <span class="comment"># biblioteca de ícones</span>
+│   │   └── screens/            <span class="comment"># 24 telas do app</span>
+│   └── lib/
+│       └── services/           <span class="comment"># wrappers tipados por domínio da API</span>
+│
+├── docker-compose.yml          <span class="comment"># Postgres + Redis</span>
+└── SIMULAR.md                  <span class="comment"># passo a passo alternativo</span></pre>
+
+<h2>7. Contas e dados demo (após <code>db seed</code>)</h2>
+
+<table>
+  <tr><th>Item</th><th>Valor</th></tr>
+  <tr><td>E-mail do dono</td><td><code>demo@barbearialuck.com</code></td></tr>
+  <tr><td>Senha</td><td><code>123456</code></td></tr>
+  <tr><td>Unidades</td><td>Atlântica (RJ) · Bom Pastor (SP)</td></tr>
+  <tr><td>Barbeiros</td><td>Diego Monteiro · Thiago Alves · Otávio Reis</td></tr>
+  <tr><td>Serviços</td><td>Corte Masculino · Barba · Combo Premium · Sobrancelha</td></tr>
+</table>
+
+<div class="callout">
+  <strong>Mocks:</strong> WhatsApp e e-mail não enviam de verdade. Os códigos OTP aparecem no <strong>log do backend</strong> (terminal onde roda <code>npm run start:dev</code>). Procure por <code>[WhatsApp]</code> ou <code>[E-mail]</code>.
+</div>
+
+<h2>8. Endpoints principais da API</h2>
+
+<h4>Autenticação</h4>
+<table>
+  <tr><th>Método</th><th>Endpoint</th><th>Descrição</th></tr>
+  <tr><td>POST</td><td><code>/auth/owner/register</code></td><td>Cadastro do dono</td></tr>
+  <tr><td>POST</td><td><code>/auth/owner/login</code></td><td>Login e-mail + senha</td></tr>
+  <tr><td>POST</td><td><code>/auth/owner/send-otp</code></td><td>Login por WhatsApp</td></tr>
+  <tr><td>POST</td><td><code>/auth/client/send-otp</code></td><td>OTP cliente (WhatsApp)</td></tr>
+  <tr><td>POST</td><td><code>/auth/client/send-email-otp</code></td><td>OTP cliente (e-mail)</td></tr>
+  <tr><td>GET</td><td><code>/auth/google/url</code></td><td>URL OAuth Google Calendar</td></tr>
+</table>
+
+<h4>Agendamentos</h4>
+<table>
+  <tr><th>Método</th><th>Endpoint</th><th>Descrição</th></tr>
+  <tr><td>GET</td><td><code>/appointments/available-slots</code></td><td>Slots livres (ownerId+date+serviceId)</td></tr>
+  <tr><td>POST</td><td><code>/appointments</code></td><td>Cria agendamento</td></tr>
+  <tr><td>GET</td><td><code>/appointments/owner</code></td><td>Agenda do dono</td></tr>
+  <tr><td>GET</td><td><code>/appointments/client</code></td><td>Histórico do cliente</td></tr>
+  <tr><td>PATCH</td><td><code>/appointments/:id/status</code></td><td>Atualiza status</td></tr>
+  <tr><td>PATCH</td><td><code>/appointments/:id/payment</code></td><td>Registra pagamento</td></tr>
+</table>
+
+<h4>Extensões</h4>
+<table>
+  <tr><th>Método</th><th>Endpoint</th><th>Descrição</th></tr>
+  <tr><td>POST</td><td><code>/availability/blocks/day</code></td><td>Bloquear dia inteiro</td></tr>
+  <tr><td>POST</td><td><code>/availability/blocks/slot</code></td><td>Bloquear slot específico</td></tr>
+  <tr><td>POST</td><td><code>/reschedule-requests</code></td><td>Cliente solicita remarcação</td></tr>
+  <tr><td>PATCH</td><td><code>/reschedule-requests/:id</code></td><td>Dono aprova/recusa</td></tr>
+  <tr><td>GET</td><td><code>/loyalty/me</code></td><td>Pontos e recompensa</td></tr>
+  <tr><td>GET</td><td><code>/financial/summary?period=week</code></td><td>Resumo por período</td></tr>
+  <tr><td>GET</td><td><code>/financial/export.csv</code></td><td>Baixa CSV do relatório</td></tr>
+</table>
+
+<div class="callout navy">
+  Todos os endpoints com token exigem <code>Authorization: Bearer &lt;token&gt;</code>. No frontend, o token fica em <code>localStorage.token</code>.
+</div>
+
+<h2>9. Design system (frontend)</h2>
+
+<h4>Tokens de cor (em <code>frontend/app/globals.css</code>)</h4>
+<table>
+  <tr><th>Token</th><th>Hex</th><th>Uso</th></tr>
+  <tr><td><code>--red</code></td><td>#C0392B</td><td>CTAs, bordas de destaque, cor do cliente</td></tr>
+  <tr><td><code>--red-soft</code></td><td>#C0392B14</td><td>Fundos suaves de estado ativo</td></tr>
+  <tr><td><code>--navy</code></td><td>#1A3A6B</td><td>CTAs do dono, elementos secundários</td></tr>
+  <tr><td><code>--navy-soft</code></td><td>#1A3A6B14</td><td>Fundos suaves do dono</td></tr>
+  <tr><td><code>--bg</code> / <code>--bg2</code></td><td>#FFFFFF / #F5F5F5</td><td>Fundo principal / secundário</td></tr>
+  <tr><td><code>--gray</code> / <code>--gray-soft</code></td><td>#BDBDBD / #E8E8E8</td><td>Divisores / borders</td></tr>
+  <tr><td><code>--ink</code></td><td>#2C2C2C</td><td>Texto principal</td></tr>
+  <tr><td><code>--whatsapp</code></td><td>#25D366</td><td>CTA WhatsApp</td></tr>
+</table>
+
+<h4>Tipografia</h4>
+<ul>
+  <li><strong>Playfair Display</strong> — títulos serifados</li>
+  <li><strong>Inter</strong> — corpo do texto</li>
+  <li><strong>Bebas Neue</strong> — "eyebrow" (labels em caixa alta)</li>
+  <li><strong>JetBrains Mono</strong> — códigos, horários, valores</li>
+  <li><strong>Dancing Script</strong> — assinatura "Luck"</li>
+</ul>
+
+<h4>Componentes reutilizáveis (em <code>components/luck/</code>)</h4>
+<ul>
+  <li><code>LuckHeader</code> — cabeçalho com logo</li>
+  <li><code>LuckProgress</code> — barra de progresso do wizard</li>
+  <li><code>LuckCTA</code> — botão principal (variantes: primary/navy/whatsapp/outline/ghost)</li>
+  <li><code>LuckFooter</code> — container do CTA no rodapé</li>
+  <li><code>LuckField</code> — input com estados idle/focus/filled/success/error</li>
+  <li><code>LuckSocialButtons</code> — Google + Facebook (mock)</li>
+</ul>
+
+<h2>10. Troubleshooting rápido</h2>
+
+<table>
+  <tr><th>Sintoma</th><th>Causa</th><th>Solução</th></tr>
+  <tr>
+    <td><code>ECONNREFUSED 5432</code></td>
+    <td>Postgres não subiu</td>
+    <td><code>docker compose logs postgres</code></td>
+  </tr>
+  <tr>
+    <td><code>Environment variable not found: DATABASE_URL</code></td>
+    <td>Falta o <code>.env</code></td>
+    <td><code>Copy-Item backend\.env.example backend\.env</code></td>
+  </tr>
+  <tr>
+    <td>Docker: <code>Virtualization support not detected</code></td>
+    <td>VT-x/AMD-V desabilitado</td>
+    <td>Habilitar na BIOS + instalar WSL 2 (<code>wsl --install</code>)</td>
+  </tr>
+  <tr>
+    <td><code>bash: comando não reconhecido</code></td>
+    <td>Rodou <code>.sh</code> no PowerShell</td>
+    <td>Use Git Bash ou rode os comandos manualmente</td>
+  </tr>
+  <tr>
+    <td><code>&&</code> não funciona</td>
+    <td>PowerShell 5 (antigo)</td>
+    <td>Rode comandos em linhas separadas</td>
+  </tr>
+  <tr>
+    <td>Frontend não atualiza</td>
+    <td>Cache do browser</td>
+    <td><span class="kbd">Ctrl+Shift+R</span> (hard refresh)</td>
+  </tr>
+  <tr>
+    <td>Backend em loop de reinício</td>
+    <td>Erro de import</td>
+    <td>Apague <code>dist/</code>, corrija o import, reinicie</td>
+  </tr>
+  <tr>
+    <td>OTP nunca "chega"</td>
+    <td>Não olhou o log</td>
+    <td>Código está no terminal do backend, prefixo <code>[WhatsApp]</code></td>
+  </tr>
+  <tr>
+    <td>Login OTP dono falha</td>
+    <td>Owner não existe</td>
+    <td>Use <code>demo@barbearialuck.com</code> + senha</td>
+  </tr>
+  <tr>
+    <td>Botão Google Calendar não conecta</td>
+    <td>Sem credenciais Google</td>
+    <td>Deixe pra depois (integração externa opcional)</td>
+  </tr>
+  <tr>
+    <td>Port 3001 já em uso</td>
+    <td>Backend rodando em outro terminal</td>
+    <td><code>Get-Process node | Stop-Process</code></td>
+  </tr>
+</table>
+
+<h2>11. Fluxos completos para testar</h2>
+
+<h4>A. Cliente novo agenda um horário</h4>
+<ol>
+  <li>Abre <code>/</code> → <strong>Sou cliente</strong></li>
+  <li>Escolhe unidade (ex: Atlântica)</li>
+  <li>Informa nome + WhatsApp → <strong>Enviar código</strong></li>
+  <li>Vai no terminal do backend → copia o OTP do log <code>[WhatsApp]</code></li>
+  <li>Digita o código → escolhe serviço → escolhe barbeiro → escolhe slot → confirma</li>
+</ol>
+
+<h4>B. Dono confere e conclui atendimento</h4>
+<ol>
+  <li>Logout → Entrar → toggle FUNCIONÁRIO → e-mail + senha</li>
+  <li>Vê o agendamento novo no dashboard</li>
+  <li>Vai no Prisma Studio (<code>npx prisma studio</code>)</li>
+  <li>Muda status do Appointment para <code>COMPLETED</code>, paymentStatus para <code>PAID</code></li>
+  <li>Volta na conta do cliente → pontos de fidelidade subiram (<code>GET /loyalty/me</code>)</li>
+</ol>
+
+<h4>C. Reagendamento pendente</h4>
+<ol>
+  <li>Como cliente → home → ícone calendário → escolhe novo horário → SOLICITAR</li>
+  <li>Log do backend mostra mensagem WhatsApp pro dono</li>
+  <li>Como dono → dashboard → badge com "1" no header → aprova ou recusa</li>
+</ol>
+
+<h2>12. Recursos externos</h2>
+
+<ul>
+  <li><strong>Documentação Prisma:</strong> <code>https://www.prisma.io/docs</code></li>
+  <li><strong>Documentação NestJS:</strong> <code>https://docs.nestjs.com</code></li>
+  <li><strong>Documentação Next.js:</strong> <code>https://nextjs.org/docs</code></li>
+  <li><strong>Docker Desktop:</strong> <code>https://docs.docker.com/desktop</code></li>
+  <li><strong>Repositório:</strong> <code>https://github.com/Rodrigotxs/LuckApp</code></li>
+  <li><strong>Branch atual:</strong> <code>claude/barbearia-luck-app-LzpRD</code></li>
+</ul>
+
+<div class="footer-note">
+  Barbearia Luck · Guia de Desenvolvimento · Gerado a partir do repositório <code>claude/barbearia-luck-app-LzpRD</code>
+</div>
+
+</body>
+</html>
