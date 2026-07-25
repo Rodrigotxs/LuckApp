@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Barbearia Luck — Checklist de Testes</title>
+<style>
+  :root {
+    --red: #C0392B; --red-soft: #C0392B14;
+    --navy: #1A3A6B; --navy-soft: #1A3A6B14;
+    --bg: #FFFFFF; --bg2: #F5F5F5;
+    --gray: #BDBDBD; --gray-soft: #E8E8E8;
+    --ink: #2C2C2C;
+    --green: #2e7d32; --green-soft: #4caf5015;
+    --amber: #b8860b; --amber-soft: #f5a62318;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg2);
+    color: var(--ink);
+    line-height: 1.5;
+    font-size: 14px;
+  }
+  header {
+    background: var(--navy);
+    color: white;
+    padding: 24px 24px 20px;
+    position: sticky; top: 0; z-index: 10;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  h1 {
+    margin: 0;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 22px;
+    letter-spacing: 0.02em;
+  }
+  h1 em { color: var(--red); font-style: normal; font-family: "Dancing Script", cursive; font-size: 26px; }
+  .subtitle {
+    font-size: 11px;
+    letter-spacing: 0.24em;
+    color: #ccc;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .toolbar {
+    display: flex; gap: 8px; margin-top: 14px; align-items: center; flex-wrap: wrap;
+  }
+  .toolbar button {
+    background: rgba(255,255,255,0.12);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .toolbar button:hover { background: rgba(255,255,255,0.22); }
+  .toolbar button.primary {
+    background: var(--red);
+    border-color: var(--red);
+  }
+  .toolbar .progress {
+    flex: 1; min-width: 200px; display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: #ddd;
+  }
+  .progress-bar {
+    flex: 1; height: 8px; background: rgba(255,255,255,0.12); border-radius: 4px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: linear-gradient(90deg, var(--red) 0%, #e74c3c 100%);
+    transition: width 0.3s ease;
+  }
+  main {
+    max-width: 960px; margin: 0 auto; padding: 24px;
+  }
+  section {
+    background: white; border-radius: 10px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    overflow: hidden;
+  }
+  .section-header {
+    background: var(--navy-soft);
+    padding: 14px 20px;
+    border-left: 4px solid var(--red);
+    display: flex; justify-content: space-between; align-items: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .section-header h2 {
+    margin: 0;
+    font-size: 15px;
+    color: var(--navy);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .section-header .badge {
+    background: var(--red-soft); color: var(--red);
+    padding: 2px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 700;
+  }
+  .section-header .badge.complete {
+    background: var(--green-soft); color: var(--green);
+  }
+  .section-content {
+    padding: 0;
+    max-height: 100000px;
+    transition: max-height 0.35s ease;
+    overflow: hidden;
+  }
+  section.collapsed .section-content {
+    max-height: 0;
+  }
+  section.collapsed .arrow { transform: rotate(-90deg); }
+  .arrow {
+    transition: transform 0.2s;
+    font-size: 12px;
+    color: var(--navy);
+    margin-left: 8px;
+  }
+  .item {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 10px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--gray-soft);
+    align-items: start;
+  }
+  .item:last-child { border-bottom: none; }
+  .item:hover { background: var(--bg2); }
+  .item input[type="checkbox"] {
+    width: 18px; height: 18px;
+    margin-top: 3px;
+    accent-color: var(--red);
+    cursor: pointer;
+  }
+  .item.done {
+    background: var(--green-soft);
+  }
+  .item.done label {
+    color: #888; text-decoration: line-through;
+  }
+  .item.blocked {
+    background: #fff5f5;
+  }
+  label {
+    cursor: pointer;
+    font-size: 13.5px;
+  }
+  .item .path {
+    display: block;
+    font-size: 11px;
+    color: var(--navy);
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    margin-top: 2px;
+  }
+  .item .expected {
+    display: block;
+    font-size: 11.5px;
+    color: #888;
+    margin-top: 4px;
+    font-style: italic;
+  }
+  .item textarea {
+    grid-column: 2;
+    width: 100%;
+    margin-top: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--gray-soft);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    resize: vertical;
+    min-height: 32px;
+    color: var(--ink);
+    background: white;
+  }
+  .item textarea:focus {
+    outline: none;
+    border-color: var(--red);
+    box-shadow: 0 0 0 3px var(--red-soft);
+  }
+  .status-toggle {
+    grid-column: 2;
+    display: flex; gap: 6px; margin-top: 6px;
+  }
+  .status-toggle button {
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--gray);
+    background: white;
+    font-size: 10.5px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    color: #888;
+    font-family: inherit;
+  }
+  .status-toggle button.active-ok {
+    background: var(--green); color: white; border-color: var(--green);
+  }
+  .status-toggle button.active-nok {
+    background: var(--red); color: white; border-color: var(--red);
+  }
+  .status-toggle button.active-na {
+    background: var(--gray); color: white; border-color: var(--gray);
+  }
+  footer {
+    text-align: center;
+    padding: 30px 24px 40px;
+    color: #888;
+    font-size: 12px;
+  }
+  .callout {
+    background: var(--red-soft);
+    border-left: 3px solid var(--red);
+    padding: 12px 16px;
+    margin: 0 20px 12px;
+    border-radius: 0 8px 8px 0;
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+  @media print {
+    header { position: static; box-shadow: none; }
+    .toolbar { display: none; }
+    section.collapsed .section-content { max-height: none; }
+    section { break-inside: avoid; box-shadow: none; border: 1px solid var(--gray-soft); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>BARBEARIA <em>Luck</em></h1>
+  <div class="subtitle">Checklist de Testes · Cobertura Funcional</div>
+  <div class="toolbar">
+    <div class="progress">
+      <span id="progress-text">0 / 0 (0%)</span>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+    <button onclick="expandirTodos()">Expandir tudo</button>
+    <button onclick="colapsarTodos()">Colapsar tudo</button>
+    <button onclick="exportar()" class="primary">Exportar JSON</button>
+    <button onclick="imprimir()">Imprimir / PDF</button>
+    <button onclick="resetar()">Limpar checklist</button>
+  </div>
+</header>
+
+<main id="app">
+  <!-- Seções são geradas por JS -->
+</main>
+
+<footer>
+  Progresso salvo automaticamente no seu navegador. Clique em <b>Exportar JSON</b> para levar para outra máquina.
+</footer>
+
+<script>
+// ─── Dados ────────────────────────────────────────────────────────
+const SECOES = [
+  {
+    id: 'setup',
+    titulo: '0. Setup do ambiente',
+    itens: [
+      { id: 'docker-up', label: 'Docker Desktop está rodando (baleia verde)', path: 'docker ps' },
+      { id: 'containers', label: 'Containers postgres e redis estão UP', path: 'docker compose up -d', expected: 'Ver barbearia_luck_db e barbearia_luck_redis em docker ps' },
+      { id: 'env-back', label: 'Arquivo backend/.env existe (copiado de .env.example)' },
+      { id: 'migrate', label: 'Migrations aplicadas no banco', path: 'npx prisma migrate deploy' },
+      { id: 'seed', label: 'Seed rodou (dono demo + unidades + serviços)', path: 'npx prisma db seed', expected: 'Ver "🎉 Seed concluído!" no log' },
+      { id: 'back-up', label: 'Backend está rodando em :3001', path: 'npm run start:dev', expected: '"🚀 Barbearia Luck API rodando na porta 3001"' },
+      { id: 'front-up', label: 'Frontend está rodando em :3000', path: 'npm run dev', expected: 'Abrir http://localhost:3000 sem erro' },
+      { id: 'swagger', label: 'Swagger acessível em /api/docs', path: 'http://localhost:3001/api/docs' },
+    ],
+  },
+
+  {
+    id: 'onboarding',
+    titulo: '1. Splash e Escolha de Perfil',
+    itens: [
+      { id: 'splash', label: 'Splash aparece por ~1.4s com logo e slogan', expected: 'BARBEARIA Luck + "TRADIÇÃO · ESTILO · PRECISÃO"' },
+      { id: 'role-picker', label: 'Tela de escolha de perfil aparece após splash', expected: 'Botões "Sou cliente", "Sou funcionário" e "Já tem conta? Entrar"' },
+      { id: 'nav-cliente', label: 'Clique em "Sou cliente" abre seletor de unidade' },
+      { id: 'nav-funcionario', label: 'Clique em "Sou funcionário" abre cadastro do dono' },
+      { id: 'nav-login', label: 'Clique em "Já tem conta? Entrar" abre login' },
+    ],
+  },
+
+  {
+    id: 'login',
+    titulo: '2. Login (variações)',
+    itens: [
+      { id: 'login-toggle-role', label: 'Toggle CLIENTE/FUNCIONÁRIO alterna cores (vermelho/navy)' },
+      { id: 'login-toggle-method', label: 'Toggle E-MAIL/WHATSAPP visível para ambos os roles' },
+      { id: 'login-cliente-wa', label: 'Cliente + WhatsApp + Senha vazia → ENVIA CÓDIGO (OTP)', expected: 'Vai para tela de OTP; código aparece no log do backend' },
+      { id: 'login-cliente-wa-otp', label: 'OTP correto do cliente → entra na home', expected: 'Redireciona pra c-home' },
+      { id: 'login-cliente-wa-otp-err', label: 'OTP incorreto do cliente → mostra erro amigável' },
+      { id: 'login-cliente-email', label: 'Cliente + E-MAIL + Senha vazia → envia código por e-mail', expected: 'Log do backend: prefixo [E-mail]' },
+      { id: 'login-cliente-senha', label: 'Cliente + WhatsApp/E-mail + SENHA → tenta login direto', expected: 'Se senha ok, entra; se não, erro amigável' },
+      { id: 'login-owner-email', label: 'Funcionário + E-MAIL + Senha demo (123456) → entra no dashboard' },
+      { id: 'login-owner-wa', label: 'Funcionário + WhatsApp existente → envia OTP', expected: 'Tela owner-otp aparece' },
+      { id: 'login-owner-wa-erro', label: 'Funcionário + WhatsApp não cadastrado → mensagem clara ("Não encontramos...")' },
+      { id: 'login-esqueci', label: 'Clique em "Esqueci minha senha" mostra "Link enviado ✓"', expected: 'Log do backend com link de reset' },
+      { id: 'login-social', label: 'Botões Google/Facebook mostram "Conectando..." (mock)' },
+    ],
+  },
+
+  {
+    id: 'cad-cliente',
+    titulo: '3. Cadastro Cliente (fluxo novo)',
+    itens: [
+      { id: 'unit-picker', label: 'UnitPicker lista unidades do backend (2 unidades no seed)', path: 'GET /units/public/:ownerId' },
+      { id: 'unit-select', label: 'Selecionar unidade destaca em vermelho + habilita CONTINUAR' },
+      { id: 'signup-toggle', label: 'Toggle WhatsApp/E-mail funciona no signup do cliente' },
+      { id: 'signup-wa', label: 'Cadastro por WhatsApp → OTP enviado (log)', path: 'POST /auth/client/send-otp' },
+      { id: 'signup-email', label: 'Cadastro por E-mail → OTP enviado por e-mail (log)', path: 'POST /auth/client/send-email-otp' },
+      { id: 'signup-terms', label: 'Checkbox "Concordo com os Termos" pode ser marcado/desmarcado' },
+      { id: 'signup-wa-vazio', label: 'Enviar com WhatsApp vazio ou < 11 dígitos → erro' },
+      { id: 'otp-6digits', label: 'OTP: 6 boxes com auto-focus ao digitar' },
+      { id: 'otp-timer', label: 'Timer de reenvio conta regressiva (~30s)' },
+      { id: 'otp-reenviar', label: 'Botão "Reenviar código" após timer' },
+      { id: 'otp-sucesso', label: 'OTP correto → tela "Bem-vindo!" (LuckClientDone)' },
+      { id: 'signup-persist', label: 'Após signup, token JWT fica em localStorage' },
+    ],
+  },
+
+  {
+    id: 'agendar',
+    titulo: '4. Fluxo de agendamento (cliente logado)',
+    itens: [
+      { id: 'ag-services-list', label: 'ClientServices lista serviços reais do backend', path: 'GET /services/public/:ownerId' },
+      { id: 'ag-services-multi', label: 'Consegue selecionar múltiplos serviços (toggle)', expected: 'Rodapé mostra contagem "N SERVIÇOS"' },
+      { id: 'ag-services-top', label: 'Serviço "Combo Premium" tem selo TOP visível' },
+      { id: 'ag-barber-list', label: 'BarberPicker lista barbeiros da unidade selecionada', path: 'GET /barbers/public/:ownerId?unitId=' },
+      { id: 'ag-barber-info', label: 'Cada barbeiro mostra nome, rating (★) e "horários livres hoje"' },
+      { id: 'ag-schedule-cal', label: 'Calendário mensal aparece com dia atual destacado' },
+      { id: 'ag-schedule-past', label: 'Dias passados desabilitados (cinza)' },
+      { id: 'ag-slots-real', label: 'Slots vem do backend', path: 'GET /appointments/available-slots' },
+      { id: 'ag-slots-busy', label: 'Slots ocupados aparecem riscados/cinzas' },
+      { id: 'ag-slot-select', label: 'Selecionar slot muda cor para vermelho + habilita CONFIRMAR' },
+      { id: 'ag-confirm-resumo', label: 'Tela de Confirmação lista serviços, data, horário, barbeiro e total' },
+      { id: 'ag-confirm-post', label: 'CONFIRMAR VIA WHATSAPP cria appointment no backend', path: 'POST /appointments' },
+      { id: 'ag-confirm-wa', label: 'Notificação WhatsApp de confirmação aparece no log' },
+      { id: 'ag-confirm-multi', label: 'Múltiplos serviços criam N appointments consecutivos' },
+      { id: 'ag-confirm-done', label: 'Após confirmar, aparece tela "Agendamento enviado!" com botão VOLTAR AO INÍCIO' },
+      { id: 'ag-confirm-passado', label: 'Tentar agendar horário no passado → backend retorna 400', expected: 'Erro: "Horário no passado"' },
+      { id: 'ag-confirm-conflito', label: 'Tentar agendar horário já ocupado → backend retorna 400', expected: 'Erro: "Horário já ocupado"' },
+    ],
+  },
+
+  {
+    id: 'c-home',
+    titulo: '5. Home do Cliente (logado)',
+    itens: [
+      { id: 'ch-saudacao', label: 'Saudação "OLÁ, [PRIMEIRO NOME]" aparece' },
+      { id: 'ch-proximo', label: 'Card de próximo agendamento mostra serviço, data e status' },
+      { id: 'ch-empty', label: 'Se sem agendamento → mostra estado vazio "Sua agenda está vazia"' },
+      { id: 'ch-remarcar', label: 'Botão REMARCAR abre tela de reagendamento' },
+      { id: 'ch-cancelar-conf', label: 'Botão CANCELAR pede confirmação (window.confirm)' },
+      { id: 'ch-cancelar-ok', label: 'Confirmar cancelamento marca appointment como CANCELLED', path: 'DELETE /appointments/:id' },
+      { id: 'ch-fidelidade', label: 'Card "Fidelidade · N pts" abre detalhes', path: 'GET /loyalty/me' },
+      { id: 'ch-resgatar', label: 'Se >=10 pts, botão RESGATAR RECOMPENSA aparece', path: 'POST /loyalty/me/redeem' },
+      { id: 'ch-historico', label: 'Lista histórico de atendimentos passados' },
+      { id: 'ch-nav-header', label: 'Ícones no header abrem calendário/perfil' },
+      { id: 'ch-cta-footer', label: 'CTA "AGENDAR NOVO HORÁRIO" no rodapé funciona' },
+    ],
+  },
+
+  {
+    id: 'reschedule',
+    titulo: '6. Reagendamento (fluxo pendente)',
+    itens: [
+      { id: 'rs-mini-cal', label: 'Mini-calendário do mês (não hardcoded)' },
+      { id: 'rs-past-day', label: 'Não permite selecionar dia no passado' },
+      { id: 'rs-slot', label: 'Selecionar horário habilita SOLICITAR ALTERAÇÃO' },
+      { id: 'rs-passado', label: 'Tentar solicitar em horário passado → erro no cliente' },
+      { id: 'rs-request', label: 'Solicitação POST /reschedule-requests OK', expected: 'Aparece tela "Aguardando confirmação"' },
+      { id: 'rs-wa', label: 'Dono recebe notificação WhatsApp (log)' },
+      { id: 'rs-vazio', label: 'Sem agendamento futuro → mostra estado "vazio"' },
+    ],
+  },
+
+  {
+    id: 'c-profile',
+    titulo: '7. Perfil do Cliente',
+    itens: [
+      { id: 'cp-load', label: 'Nome, WhatsApp e E-mail carregados do backend', path: 'GET /clients/me' },
+      { id: 'cp-empty-check', label: 'Campos vazios NÃO exibem check verde (bug corrigido)' },
+      { id: 'cp-edit-btn', label: 'Ícone de lápis alterna modo de edição' },
+      { id: 'cp-edit-save', label: 'Salvar chama PATCH /clients/me e mostra "Alterações salvas"' },
+      { id: 'cp-nova-senha', label: 'Campo "Nova senha" aceita valor e chama /auth/client/set-password' },
+      { id: 'cp-senha-curta', label: 'Senha < 6 caracteres → erro no cliente' },
+      { id: 'cp-whatsapp-dup', label: 'WhatsApp já em uso por outro cliente → erro (409 Conflict)' },
+      { id: 'cp-sair', label: 'Botão SAIR DA CONTA limpa sessão e volta ao role picker' },
+    ],
+  },
+
+  {
+    id: 'o-dashboard',
+    titulo: '8. Painel do Dono (dashboard)',
+    itens: [
+      { id: 'od-load', label: 'Login como demo@barbearialuck.com / 123456 abre dashboard' },
+      { id: 'od-data', label: 'Data atual no header ("SEGUNDA · 27 ABR")' },
+      { id: 'od-kpis', label: '3 KPIs: HOJE (contagem), LIVRES, R$' },
+      { id: 'od-agendamentos', label: 'Lista de agendamentos do dia (GET /appointments/owner)' },
+      { id: 'od-empty', label: 'Se nenhum → "Que tal aproveitar para descansar? 🧉"' },
+      { id: 'od-status', label: 'Cores diferentes para done/live/next (livre)' },
+      { id: 'od-live', label: 'Agendamento em andamento mostra "AGORA" em vermelho' },
+      { id: 'od-icons', label: 'Ícones no header: perfil, calendário, reagendamentos, +novo' },
+      { id: 'od-badge', label: 'Badge vermelha aparece se há pedidos de reagendamento pendentes' },
+      { id: 'od-refresh', label: 'CTA rodapé abre financeiro' },
+    ],
+  },
+
+  {
+    id: 'o-agenda',
+    titulo: '9. Editor de Agenda (bloqueios)',
+    itens: [
+      { id: 'oa-cal', label: 'Calendário mensal mostra o mês corrente' },
+      { id: 'oa-day-blocked', label: 'Dias bloqueados aparecem em vermelho suave' },
+      { id: 'oa-block-day', label: 'BLOQUEAR DIA INTEIRO cria AvailabilityBlock', path: 'POST /availability/blocks/day' },
+      { id: 'oa-reopen-day', label: 'REABRIR ESTE DIA remove o bloqueio', path: 'DELETE /availability/blocks/:id' },
+      { id: 'oa-slot', label: 'Bloquear slot específico funciona', path: 'POST /availability/blocks/slot' },
+      { id: 'oa-effect', label: 'Slot bloqueado NÃO aparece disponível para cliente', expected: 'Testar agendando como cliente após bloquear' },
+      { id: 'oa-past', label: 'Dias passados desabilitados' },
+    ],
+  },
+
+  {
+    id: 'o-new',
+    titulo: '10. Menu "Novo" (bottom-sheet)',
+    itens: [
+      { id: 'on-open', label: 'Botão + no header abre bottom-sheet' },
+      { id: 'on-book', label: 'AGENDAR ATENDIMENTO abre BookForm' },
+      { id: 'on-block', label: 'BLOQUEAR HORÁRIO abre BlockForm' },
+      { id: 'on-cancel', label: 'CANCELAR fecha sem fazer nada' },
+    ],
+  },
+
+  {
+    id: 'o-book',
+    titulo: '11. BookForm (dono agenda para cliente)',
+    itens: [
+      { id: 'ob-form', label: 'Campos: nome, WhatsApp, serviço, data, horário' },
+      { id: 'ob-services', label: 'Lista de serviços vem do backend', path: 'GET /services' },
+      { id: 'ob-empty', label: 'Se sem serviços, mostra mensagem para cadastrar antes' },
+      { id: 'ob-create-client', label: 'Se WhatsApp novo → cria cliente automaticamente', path: 'POST /clients/find-or-create' },
+      { id: 'ob-reuse-client', label: 'Se WhatsApp já cadastrado → reutiliza cliente existente' },
+      { id: 'ob-appt', label: 'CONFIRMAR ATENDIMENTO cria appointment com clientId', path: 'POST /appointments com clientId' },
+      { id: 'ob-appears', label: 'Aparece no dashboard do dono ao voltar' },
+      { id: 'ob-passado', label: 'Data no passado → backend recusa (400)' },
+    ],
+  },
+
+  {
+    id: 'o-block',
+    titulo: '12. BlockForm (compromisso pessoal)',
+    itens: [
+      { id: 'oblk-motivo', label: 'Campo motivo aceita texto' },
+      { id: 'oblk-hora', label: 'Início e fim aceitam HH:MM' },
+      { id: 'oblk-create', label: 'BLOQUEAR HORÁRIO cria AvailabilityBlock', path: 'POST /availability/blocks/slot' },
+      { id: 'oblk-effect', label: 'Slot bloqueado desaparece dos disponíveis pro cliente' },
+    ],
+  },
+
+  {
+    id: 'o-reschedule',
+    titulo: '13. Pedidos de Reagendamento (dono aprova)',
+    itens: [
+      { id: 'orr-badge', label: 'Badge com contagem de pendentes no header do dashboard' },
+      { id: 'orr-list', label: 'Tela lista pedidos com cliente, serviço, data atual, data proposta', path: 'GET /reschedule-requests/owner?status=PENDING' },
+      { id: 'orr-approve', label: 'APROVAR E REMARCAR → move appointment + notifica cliente', path: 'PATCH /reschedule-requests/:id' },
+      { id: 'orr-reject', label: 'RECUSAR → notifica cliente + fecha pedido' },
+      { id: 'orr-past', label: 'Aprovar remarcação para horário passado → backend recusa (400)' },
+      { id: 'orr-conflito', label: 'Aprovar em horário já ocupado → backend recusa (400)' },
+      { id: 'orr-empty', label: 'Sem pendentes → mensagem "Nenhum pedido pendente"' },
+    ],
+  },
+
+  {
+    id: 'o-finance',
+    titulo: '14. Financeiro',
+    itens: [
+      { id: 'of-load', label: 'Tela abre com dados reais', path: 'GET /financial/summary + report' },
+      { id: 'of-periodo', label: 'Toggle SEMANA/MÊS/ANO troca os valores' },
+      { id: 'of-servico', label: 'Filtro por tipo de serviço funciona' },
+      { id: 'of-total', label: 'Card TOTAL mostra R$ correto (soma dos COMPLETED+PAID)' },
+      { id: 'of-count', label: 'Badge "N atendimentos" bate com quantidade filtrada' },
+      { id: 'of-chart', label: 'Gráfico de barras (7 dias) aparece' },
+      { id: 'of-list', label: 'Lista de atendimentos abaixo mostra cliente, serviço, data, valor' },
+      { id: 'of-csv', label: 'EXPORTAR BASE baixa CSV com dados', path: 'GET /financial/export.csv', expected: 'Abre CSV no Excel com colunas certas' },
+      { id: 'of-empty', label: 'Filtro que não retorna nada mostra "Nenhum atendimento"' },
+      { id: 'of-datas-invalidas', label: 'Datas malformadas no report → backend retorna 400' },
+    ],
+  },
+
+  {
+    id: 'o-profile',
+    titulo: '15. Perfil do Dono',
+    itens: [
+      { id: 'op-load', label: 'Nome, WhatsApp, e-mail, estabelecimento carregados', path: 'GET /owners/me' },
+      { id: 'op-endereco', label: 'Campo Endereço editável e persistido' },
+      { id: 'op-cep', label: 'Campo CEP editável e persistido' },
+      { id: 'op-save', label: 'SALVAR ALTERAÇÕES chama PATCH /owners/me' },
+      { id: 'op-email-dup', label: 'Email já em uso por outro dono → 409 Conflict com mensagem clara' },
+      { id: 'op-wa-dup', label: 'WhatsApp já em uso → 409 Conflict' },
+      { id: 'op-unit-dropdown', label: 'Dropdown de unidade vinculada abre e permite trocar' },
+      { id: 'op-google', label: 'Botão Google Calendar mostra estado real (conectado/não)', path: 'GET /owners/me googleConnected' },
+      { id: 'op-sair', label: 'Botão SAIR DA CONTA limpa sessão' },
+    ],
+  },
+
+  {
+    id: 'o-services',
+    titulo: '16. Cadastro de Serviços (dono)',
+    itens: [
+      { id: 'os-list', label: 'Lista serviços cadastrados', path: 'GET /services' },
+      { id: 'os-add', label: 'ADICIONAR SERVIÇO abre formulário' },
+      { id: 'os-add-empty', label: 'Nome vazio → erro' },
+      { id: 'os-add-price', label: 'Preço inválido → erro' },
+      { id: 'os-add-duration', label: 'Duração < 5min → erro' },
+      { id: 'os-add-ok', label: 'Preenchido válido → cria e aparece na lista', path: 'POST /services' },
+      { id: 'os-remove', label: 'Ícone "..." pede confirmação e desativa', path: 'DELETE /services/:id' },
+    ],
+  },
+
+  {
+    id: 'o-calendar',
+    titulo: '17. Conectar Google Calendar (opcional)',
+    itens: [
+      { id: 'oc-desconectado', label: 'Botão CONECTAR aparece se não conectado' },
+      { id: 'oc-url', label: 'Clique chama endpoint que retorna URL Google', path: 'GET /auth/google/url' },
+      { id: 'oc-redirect', label: 'Browser redireciona pro Google', expected: 'Requer GOOGLE_CLIENT_ID configurado' },
+      { id: 'oc-conectado', label: 'Após OAuth, tela mostra e-mail conectado + selo verde' },
+    ],
+  },
+
+  {
+    id: 'seguranca',
+    titulo: '18. Segurança e autorização',
+    itens: [
+      { id: 'sec-jwt-expired', label: 'JWT expirado força novo login' },
+      { id: 'sec-no-passwordhash', label: 'GET /clients/me NÃO retorna passwordHash' },
+      { id: 'sec-no-otp', label: 'GET /clients NÃO retorna otpCode/emailOtpCode/tokens' },
+      { id: 'sec-role-owner', label: 'Cliente tentando GET /clients recebe 403 Forbidden' },
+      { id: 'sec-role-client', label: 'Dono tentando GET /clients/me recebe 403 Forbidden' },
+      { id: 'sec-appt-other-owner', label: 'Dono tentando POST /appointments com ownerId de outro dono → 403' },
+      { id: 'sec-avail-other-barber', label: 'Dono bloqueando agenda de barbeiro alheio → 404' },
+      { id: 'sec-reset-token', label: 'Reset senha com token inválido → 400' },
+    ],
+  },
+
+  {
+    id: 'integrações',
+    titulo: '19. Integrações (mocks)',
+    itens: [
+      { id: 'int-wa-otp', label: 'Envio de OTP WhatsApp: log com prefixo [WhatsApp]' },
+      { id: 'int-email-otp', label: 'Envio de OTP e-mail: log com prefixo [E-mail]' },
+      { id: 'int-wa-confirm', label: 'Confirmação de agendamento envia WhatsApp (log)' },
+      { id: 'int-wa-reminder', label: 'Cron a cada 5min: mensagem 1h antes do agendamento (log)', expected: 'Criar appointment para daqui a ~1h e esperar 5min' },
+      { id: 'int-wa-reschedule', label: 'Solicitação de remarcação notifica dono via WhatsApp (log)' },
+      { id: 'int-wa-response', label: 'Aprovação/recusa notifica cliente via WhatsApp (log)' },
+      { id: 'int-email-reset', label: 'Solicitar reset senha manda link por e-mail (log)' },
+    ],
+  },
+
+  {
+    id: 'ui-ux',
+    titulo: '20. UI / UX gerais',
+    itens: [
+      { id: 'ux-mobile', label: 'App renderiza bem em mobile (F12 → toolbar de dispositivo)' },
+      { id: 'ux-desktop', label: 'App renderiza centralizado em desktop (max-width 430px)' },
+      { id: 'ux-fonts', label: 'Fontes Playfair Display, Inter, Bebas Neue e Dancing Script carregam' },
+      { id: 'ux-icons', label: 'Ícones aparecem em todas as telas (Lucide)' },
+      { id: 'ux-logo', label: 'Logo Barbearia Luck aparece no header e splash' },
+      { id: 'ux-cta-active', label: 'Botões tem feedback de :active (scale 0.97)' },
+      { id: 'ux-loading', label: 'Estados de loading aparecem (esqueletos ou "Carregando...")' },
+      { id: 'ux-error', label: 'Erros do backend aparecem em card vermelho, legível' },
+    ],
+  },
+
+  {
+    id: 'pendencias',
+    titulo: '21. Pendências conhecidas (não bloqueiam)',
+    itens: [
+      { id: 'p-barbers-ui', label: 'Não há tela para dono gerenciar barbeiros (só via signup)', expected: 'API existe (/barbers)' },
+      { id: 'p-units-ui', label: 'Não há tela para dono gerenciar unidades', expected: 'API existe (/units)' },
+      { id: 'p-workinghours-ui', label: 'Não há tela para dono configurar horários de funcionamento', expected: 'API existe (/working-hours)' },
+      { id: 'p-transacoes', label: 'Não há UI para dono atualizar status/pagamento de agendamento', expected: 'Fazer via Swagger PATCH /appointments/:id/status e /payment' },
+    ],
+  },
+];
+
+// ─── Estado ───────────────────────────────────────────────────────
+const STORAGE_KEY = 'luck-checklist-v1';
+let estado = carregarEstado();
+
+function carregarEstado() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+function salvarEstado() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+  atualizarProgresso();
+  atualizarBadges();
+}
+
+// ─── Renderização ────────────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = SECOES.map(secao => `
+    <section id="sec-${secao.id}">
+      <div class="section-header" onclick="toggleSecao('${secao.id}')">
+        <h2>${secao.titulo}</h2>
+        <div>
+          <span class="badge" id="badge-${secao.id}">0/${secao.itens.length}</span>
+          <span class="arrow">▼</span>
+        </div>
+      </div>
+      <div class="section-content">
+        ${secao.itens.map(item => renderItem(secao.id, item)).join('')}
+      </div>
+    </section>
+  `).join('');
+  atualizarProgresso();
+  atualizarBadges();
+}
+
+function renderItem(secaoId, item) {
+  const key = `${secaoId}.${item.id}`;
+  const dados = estado[key] || {};
+  const status = dados.status || 'pending';
+  const cls = status === 'ok' ? 'done' : status === 'nok' ? 'blocked' : '';
+  const checked = status === 'ok' ? 'checked' : '';
+  return `
+    <div class="item ${cls}" id="item-${key.replace(/\./g,'-')}">
+      <input type="checkbox" id="chk-${key.replace(/\./g,'-')}" ${checked}
+        onchange="alternarCheck('${key}', this.checked)" />
+      <div>
+        <label for="chk-${key.replace(/\./g,'-')}">${escapeHtml(item.label)}</label>
+        ${item.path ? `<span class="path">${escapeHtml(item.path)}</span>` : ''}
+        ${item.expected ? `<span class="expected">Esperado: ${escapeHtml(item.expected)}</span>` : ''}
+        <div class="status-toggle">
+          <button class="${status==='ok'?'active-ok':''}" onclick="setStatus('${key}','ok')">OK</button>
+          <button class="${status==='nok'?'active-nok':''}" onclick="setStatus('${key}','nok')">Falhou</button>
+          <button class="${status==='na'?'active-na':''}" onclick="setStatus('${key}','na')">N/A</button>
+          <button onclick="setStatus('${key}','pending')" title="Limpar">↺</button>
+        </div>
+        <textarea placeholder="Observações (opcional)"
+          oninput="setObs('${key}', this.value)">${escapeHtml(dados.obs || '')}</textarea>
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function toggleSecao(id) {
+  document.getElementById(`sec-${id}`).classList.toggle('collapsed');
+}
+function expandirTodos() { document.querySelectorAll('section').forEach(s => s.classList.remove('collapsed')); }
+function colapsarTodos() { document.querySelectorAll('section').forEach(s => s.classList.add('collapsed')); }
+
+function alternarCheck(key, checked) {
+  setStatus(key, checked ? 'ok' : 'pending');
+}
+
+function setStatus(key, status) {
+  estado[key] = estado[key] || {};
+  estado[key].status = status;
+  salvarEstado();
+  // Re-render só o item afetado
+  const [secaoId, itemId] = key.split('.');
+  const secao = SECOES.find(s => s.id === secaoId);
+  const item = secao.itens.find(i => i.id === itemId);
+  const container = document.getElementById(`item-${key.replace(/\./g,'-')}`);
+  const novo = document.createElement('div');
+  novo.innerHTML = renderItem(secaoId, item);
+  container.replaceWith(novo.firstElementChild);
+}
+
+function setObs(key, valor) {
+  estado[key] = estado[key] || {};
+  estado[key].obs = valor;
+  // Debounce salvar
+  clearTimeout(setObs._t);
+  setObs._t = setTimeout(salvarEstado, 400);
+}
+
+function atualizarProgresso() {
+  const total = SECOES.reduce((s, sec) => s + sec.itens.length, 0);
+  const feitos = SECOES.reduce((s, sec) => s + sec.itens.filter(it => {
+    const st = estado[`${sec.id}.${it.id}`]?.status;
+    return st === 'ok' || st === 'na';
+  }).length, 0);
+  const pct = total > 0 ? Math.round((feitos / total) * 100) : 0;
+  document.getElementById('progress-text').textContent = `${feitos} / ${total} (${pct}%)`;
+  document.getElementById('progress-fill').style.width = `${pct}%`;
+}
+
+function atualizarBadges() {
+  SECOES.forEach(sec => {
+    const feitos = sec.itens.filter(it => {
+      const st = estado[`${sec.id}.${it.id}`]?.status;
+      return st === 'ok' || st === 'na';
+    }).length;
+    const badge = document.getElementById(`badge-${sec.id}`);
+    if (badge) {
+      badge.textContent = `${feitos}/${sec.itens.length}`;
+      badge.classList.toggle('complete', feitos === sec.itens.length);
+    }
+  });
+}
+
+function exportar() {
+  const linhas = [];
+  linhas.push('# Barbearia Luck — Checklist de Testes');
+  linhas.push(`# Exportado em ${new Date().toLocaleString('pt-BR')}`);
+  linhas.push('');
+  SECOES.forEach(sec => {
+    linhas.push(`## ${sec.titulo}`);
+    sec.itens.forEach(it => {
+      const key = `${sec.id}.${it.id}`;
+      const d = estado[key] || {};
+      const mark = d.status === 'ok' ? '[x]' : d.status === 'nok' ? '[!]' : d.status === 'na' ? '[-]' : '[ ]';
+      linhas.push(`- ${mark} ${it.label}`);
+      if (it.path) linhas.push(`    · path: ${it.path}`);
+      if (d.obs) linhas.push(`    · obs: ${d.obs}`);
+    });
+    linhas.push('');
+  });
+  const conteudo = linhas.join('\n');
+  const jsonPayload = { versao: 1, exportadoEm: new Date().toISOString(), estado };
+
+  // Baixa .md
+  baixar('checklist-luck.md', conteudo, 'text/markdown');
+  // Baixa .json (backup completo)
+  baixar('checklist-luck.json', JSON.stringify(jsonPayload, null, 2), 'application/json');
+}
+
+function baixar(nome, conteudo, tipo) {
+  const blob = new Blob([conteudo], { type: `${tipo};charset=utf-8` });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nome;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function imprimir() {
+  expandirTodos();
+  setTimeout(() => window.print(), 300);
+}
+
+function resetar() {
+  if (!confirm('Zerar todo o checklist? Você perde marcações e observações.')) return;
+  estado = {};
+  localStorage.removeItem(STORAGE_KEY);
+  render();
+}
+
+render();
+</script>
+
+</body>
+</html>
