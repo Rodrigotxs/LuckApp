@@ -24,7 +24,8 @@ model Owner {
   // OTP para login/registro via WhatsApp (paridade com cliente)
   otpCode              String?
   otpExpiresAt         DateTime?
-  // Reset de senha
+  otpAttempts          Int                 @default(0)
+  // Reset de senha — guardamos o HASH do token, nunca o valor enviado ao usuário
   passwordResetToken   String?
   passwordResetExpires DateTime?
   units                Unit[]
@@ -79,13 +80,16 @@ model Client {
   id                   String              @id @default(uuid())
   name                 String
   whatsapp             String              @unique
-  email                String?
+  email                String?             @unique
   passwordHash         String?
   otpCode              String?
   otpExpiresAt         DateTime?
+  // Tentativas erradas do OTP — zera a cada novo envio, invalida o código ao estourar
+  otpAttempts          Int                 @default(0)
   // OTP separado por e-mail (permite mudar canal)
   emailOtpCode         String?
   emailOtpExpiresAt    DateTime?
+  emailOtpAttempts     Int                 @default(0)
   // Reset de senha (fallback; cliente normalmente usa OTP)
   passwordResetToken   String?
   passwordResetExpires DateTime?
@@ -137,6 +141,8 @@ model Appointment {
   @@index([ownerId, startAt])
   @@index([barberId, startAt])
   @@index([clientId])
+  @@index([ownerId, status, startAt])
+  @@index([clientId, startAt])
 }
 
 model WorkingHours {

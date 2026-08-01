@@ -32,23 +32,62 @@ export class LoyaltyService {
    * `loyaltyPointsGiven` no Appointment para não contar duas vezes).
    */
   async concederPontos(appointmentId: string) {
+    return this.sincronizarPontos(appointmentId);
+  }
+
+  /**
+   * Alinha o saldo de pontos ao estado atual do agendamento, nos dois sentidos.
+   *
+   * Ganhou ponto e depois o dono desfez o "concluído"/"pago"? O ponto volta.
+   * A versão anterior só concedia, então bastava marcar concluído+pago e
+   * cancelar em seguida para acumular fidelidade sem atendimento.
+   *
+   * A idempotência vem de um `updateMany` condicional em vez de
+   * "ler a flag, decidir, gravar": a decisão e a gravação viram uma
+   * operação atômica, e duas chamadas simultâneas não contam o ponto duas vezes.
+   */
+  async sincronizarPontos(appointmentId: string) {
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
     });
     if (!appointment) return;
-    if (appointment.loyaltyPointsGiven) return;
-    if (appointment.status !== 'COMPLETED' || appointment.paymentStatus !== 'PAID') return;
 
-    await this.prisma.$transaction([
-      this.prisma.client.update({
-        where: { id: appointment.clientId },
-        data: { loyaltyPoints: { increment: 1 } },
-      }),
-      this.prisma.appointment.update({
-        where: { id: appointmentId },
+    const merecePonto =
+      appointment.status === 'COMPLETED' && appointment.paymentStatus === 'PAID';
+
+    if (merecePonto && !appointment.loyaltyPointsGiven) {
+      const marcou = await this.prisma.appointment.updateMany({
+        where: { id: appointmentId, loyaltyPointsGiven: false },
         data: { loyaltyPointsGiven: true },
-      }),
-    ]);
+      });
+      // Só credita quem efetivamente virou a flag — o perdedor da corrida
+      // recebe count 0 e não credita nada.
+      if (marcou.count === 1) {
+        await this.prisma.client.update({
+          where: { id: appointment.clientId },
+          data: { loyaltyPoints: { increment: 1 } },
+        });
+      }
+      return;
+    }
+
+    if (!merecePonto && appointment.loyaltyPointsGiven) {
+      const desmarcou = await this.prisma.appointment.updateMany({
+        where: { id: appointmentId, loyaltyPointsGiven: true },
+        data: { loyaltyPointsGiven: false },
+      });
+      if (desmarcou.count === 1) {
+        await this.prisma.client.update({
+          where: { id: appointment.clientId },
+          // Nunca deixa o saldo negativo.
+          data: { loyaltyPoints: { decrement: 1 } },
+        });
+        await this.prisma.client.updateMany({
+          where: { id: appointment.clientId, loyaltyPoints: { lt: 0 } },
+          data: { loyaltyPoints: 0 },
+        });
+      }
+    }
   }
 
   /**
@@ -61,10 +100,18 @@ export class LoyaltyService {
       return { resgatado: false, motivo: `Você precisa de ${LOYALTY_TARGET} pontos` };
     }
 
-    await this.prisma.client.update({
-      where: { id: clientId },
-      data: { loyaltyPoints: client.loyaltyPoints - LOYALTY_TARGET },
+    // Débito condicional e atômico. Escrever o valor calculado em memória
+    // (`pontos - META`) permitia dois resgates simultâneos passarem os dois
+    // na checagem e gravarem o mesmo saldo final — dois prêmios, um débito.
+    const debitado = await this.prisma.client.updateMany({
+      where: { id: clientId, loyaltyPoints: { gte: LOYALTY_TARGET } },
+      data: { loyaltyPoints: { decrement: LOYALTY_TARGET } },
     });
-    return { resgatado: true, saldoAposResgate: client.loyaltyPoints - LOYALTY_TARGET };
+    if (debitado.count === 0) {
+      return { resgatado: false, motivo: `Você precisa de ${LOYALTY_TARGET} pontos` };
+    }
+
+    const atualizado = await this.prisma.client.findUnique({ where: { id: clientId } });
+    return { resgatado: true, saldoAposResgate: atualizado?.loyaltyPoints ?? 0 };
   }
 }
