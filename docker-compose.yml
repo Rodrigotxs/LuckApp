@@ -1,3 +1,11 @@
+# Nome fixo do projeto Compose.
+#
+# Sem isto o Compose deriva o nome da PASTA, entao o mesmo repositorio clonado
+# em dois lugares vira dois projetos diferentes — e como os servicos abaixo tem
+# container_name fixo, o segundo falha com "container name is already in use".
+# Com o nome fixado, rodar de qualquer pasta reaproveita os mesmos containers.
+name: luckapp
+
 services:
   postgres:
     image: postgres:15

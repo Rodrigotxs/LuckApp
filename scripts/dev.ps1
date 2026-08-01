@@ -78,6 +78,24 @@ function Invoke-Native {
   }
 }
 
+# Mesma ideia do Invoke-Native, mas devolvendo a saida em texto.
+function Get-NativeOut {
+  param(
+    [Parameter(Mandatory)][string]$Programa,
+    [string[]]$Argumentos = @()
+  )
+
+  $anterior = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    $saida = & $Programa @Argumentos 2>&1 |
+      Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] }
+    return (($saida | Out-String).Trim())
+  } finally {
+    $ErrorActionPreference = $anterior
+  }
+}
+
 Write-Host @"
 
   BARBEARIA LUCK - ambiente de desenvolvimento
@@ -194,24 +212,54 @@ try {
 
   # O Docker escreve o progresso em stderr; por isso passa pelo Invoke-Native.
   $codigo = Invoke-Native 'docker' @('compose', 'up', '-d') -Silencioso
+
   if ($codigo -ne 0) {
-    Write-Warn 'docker compose up falhou - repetindo com a saida visivel:'
-    Invoke-Native 'docker' @('compose', 'up', '-d') | Out-Null
-    Die 'Nao consegui subir os containers. O erro esta logo acima.'
+    # Caso mais comum de falha aqui: os containers ja existem, criados por
+    # outro checkout do mesmo repositorio. O docker-compose.yml fixa
+    # container_name, e o Compose deriva o nome do projeto da pasta — logo,
+    # a mesma stack rodando de outra pasta bate de frente por nome.
+    #
+    # Se o Postgres ja esta no ar, abortar seria birra: o que o usuario quer
+    # e o banco disponivel, e ele esta.
+    $rodando = Get-NativeOut 'docker' @(
+      'ps', '--filter', 'name=barbearia_luck', '--filter', 'status=running', '--format', '{{.Names}}'
+    )
+
+    if ($rodando -match 'barbearia_luck_db') {
+      Write-Warn 'Os containers ja existiam (provavelmente de outro checkout) - reaproveitando'
+      if ($rodando -notmatch 'barbearia_luck_redis') {
+        Write-Warn 'O Redis nao esta rodando, mas o app nao depende dele em desenvolvimento'
+      }
+    } else {
+      Write-Warn 'docker compose up falhou - repetindo com a saida visivel:'
+      Invoke-Native 'docker' @('compose', 'up', '-d') | Out-Null
+      Write-Host ''
+      Write-Host '  Se o erro citar "container name is already in use", rode:' -ForegroundColor Yellow
+      Write-Host '    docker rm -f barbearia_luck_db barbearia_luck_redis' -ForegroundColor Yellow
+      Write-Host '  e chame o dev.cmd de novo. Isso remove os containers, nao os dados.' -ForegroundColor Yellow
+      Write-Host ''
+      Die 'Nao consegui subir os containers.'
+    }
+  } else {
+    Write-Ok 'Containers no ar'
   }
-  Write-Ok 'Containers no ar'
 
   Write-Host '  ...  aguardando o Postgres aceitar conexao' -NoNewline
   $pronto = $false
   foreach ($i in 1..60) {
+    # Pelo compose primeiro; se o container veio de outro projeto, o exec
+    # direto pelo nome ainda funciona.
     if ((Invoke-Native 'docker' @('compose', 'exec', '-T', 'postgres', 'pg_isready', '-U', 'postgres') -Silencioso) -eq 0) {
+      $pronto = $true; break
+    }
+    if ((Invoke-Native 'docker' @('exec', 'barbearia_luck_db', 'pg_isready', '-U', 'postgres') -Silencioso) -eq 0) {
       $pronto = $true; break
     }
     Start-Sleep -Seconds 1
     Write-Host '.' -NoNewline
   }
   Write-Host ''
-  if (-not $pronto) { Die 'Postgres nao ficou pronto em 60s. Veja: docker compose logs postgres' }
+  if (-not $pronto) { Die 'Postgres nao ficou pronto em 60s. Veja: docker logs barbearia_luck_db' }
   Write-Ok 'Postgres pronto'
 } finally { Pop-Location }
 
