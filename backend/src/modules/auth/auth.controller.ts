@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Get, Req, Res, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterOwnerDto } from './dto/register-owner.dto';
@@ -26,6 +27,7 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('owner/register')
   @ApiOperation({ summary: 'Cadastro do dono da barbearia' })
   registrar(@Body() dto: RegisterOwnerDto) {
@@ -33,6 +35,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('owner/login')
   @ApiOperation({ summary: 'Login do dono com email e senha' })
   login(@Body() dto: LoginOwnerDto) {
@@ -40,6 +43,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('client/send-otp')
   @ApiOperation({ summary: 'Envia OTP via WhatsApp para o cliente' })
   enviarOtp(@Body() dto: SendOtpDto) {
@@ -47,6 +51,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('client/verify-otp')
   @ApiOperation({ summary: 'Valida OTP e retorna JWT do cliente' })
   verificarOtp(@Body() dto: VerifyOtpDto) {
@@ -54,6 +59,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('client/send-email-otp')
   @ApiOperation({ summary: 'Envia OTP para o e-mail do cliente' })
   enviarOtpEmail(@Body() dto: SendClientEmailOtpDto) {
@@ -61,6 +67,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('client/verify-email-otp')
   @ApiOperation({ summary: 'Valida OTP recebido por e-mail e retorna JWT do cliente' })
   verificarOtpEmail(@Body() dto: VerifyClientEmailOtpDto) {
@@ -68,6 +75,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('client/login')
   @ApiOperation({ summary: 'Login do cliente com email/whatsapp + senha' })
   loginCliente(@Body() dto: LoginClientDto) {
@@ -83,6 +91,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('client/password-reset/request')
   @ApiOperation({ summary: 'Solicita link de reset de senha do cliente' })
   solicitarResetSenhaCliente(@Body() dto: RequestClientPasswordResetDto) {
@@ -90,6 +99,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('client/password-reset/confirm')
   @ApiOperation({ summary: 'Confirma nova senha do cliente usando token' })
   confirmarResetSenhaCliente(@Body() dto: ConfirmClientPasswordResetDto) {
@@ -97,6 +107,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('owner/send-otp')
   @ApiOperation({ summary: 'Envia OTP via WhatsApp para o dono (login sem senha)' })
   enviarOtpOwner(@Body() dto: SendOwnerOtpDto) {
@@ -104,6 +115,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('owner/verify-otp')
   @ApiOperation({ summary: 'Valida OTP do dono e retorna JWT' })
   verificarOtpOwner(@Body() dto: VerifyOwnerOtpDto) {
@@ -111,6 +123,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 5 } })
   @Post('owner/password-reset/request')
   @ApiOperation({ summary: 'Solicita link de reset de senha (por email ou WhatsApp)' })
   solicitarResetSenha(@Body() dto: RequestPasswordResetDto) {
@@ -118,6 +131,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
   @Post('owner/password-reset/confirm')
   @ApiOperation({ summary: 'Confirma nova senha usando token' })
   confirmarResetSenha(@Body() dto: ConfirmPasswordResetDto) {

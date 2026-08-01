@@ -20,7 +20,21 @@ import {
   LoginClientDto, SetClientPasswordDto,
   RequestClientPasswordResetDto, ConfirmClientPasswordResetDto,
 } from './dto/client-password.dto';
-import * as crypto from 'crypto';
+import {
+  gerarCodigoOtp,
+  compararSegredo,
+  gerarTokenReset,
+  hashToken,
+  expiracaoOtp,
+  OTP_MAX_ATTEMPTS,
+} from '../../common/security/otp.util';
+
+/**
+ * Mensagem única para toda falha de OTP. Diferenciar "conta não existe",
+ * "código expirado" e "código errado" entrega ao atacante um oráculo para
+ * descobrir quais números/e-mails estão cadastrados.
+ */
+const MSG_OTP_INVALIDO = 'Código inválido ou expirado. Solicite um novo.';
 
 @Injectable()
 export class AuthService {
@@ -89,12 +103,15 @@ export class AuthService {
   }
 
   async enviarOtp(dto: SendOtpDto) {
-    const codigo = this.gerarCodigoOtp();
-    const expiracao = new Date(Date.now() + 10 * 60 * 1000);
+    const codigo = gerarCodigoOtp();
+    const expiracao = expiracaoOtp();
 
+    // O `name` NÃO é atualizado aqui de propósito: esta rota é pública, e
+    // permitir update de nome sem autenticação deixaria qualquer um renomear
+    // a conta de outro cliente só sabendo o número dele.
     await this.prisma.client.upsert({
       where: { whatsapp: dto.whatsapp },
-      update: { otpCode: codigo, otpExpiresAt: expiracao, name: dto.name },
+      update: { otpCode: codigo, otpExpiresAt: expiracao, otpAttempts: 0 },
       create: {
         name: dto.name,
         whatsapp: dto.whatsapp,
@@ -110,15 +127,33 @@ export class AuthService {
 
   async verificarOtp(dto: VerifyOtpDto) {
     const client = await this.prisma.client.findUnique({ where: { whatsapp: dto.whatsapp } });
-    if (!client || !client.otpCode) throw new BadRequestException('Código inválido ou expirado');
-    if (client.otpCode !== dto.code) throw new BadRequestException('Código OTP incorreto');
+
+    // Mensagem única para "não existe", "sem código", "expirado" e "errado":
+    // qualquer diferenciação vira oráculo de enumeração de conta.
+    if (!client || !client.otpCode) throw new BadRequestException(MSG_OTP_INVALIDO);
+
     if (client.otpExpiresAt && client.otpExpiresAt < new Date()) {
-      throw new BadRequestException('Código OTP expirado. Solicite um novo.');
+      await this.limparOtpCliente(client.id);
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    if (client.otpAttempts >= OTP_MAX_ATTEMPTS) {
+      await this.limparOtpCliente(client.id);
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    if (!compararSegredo(client.otpCode, dto.code)) {
+      // Sem contador, um código de 6 dígitos cai por força bruta em minutos.
+      await this.prisma.client.update({
+        where: { id: client.id },
+        data: { otpAttempts: { increment: 1 } },
+      });
+      throw new BadRequestException(MSG_OTP_INVALIDO);
     }
 
     await this.prisma.client.update({
       where: { id: client.id },
-      data: { otpCode: null, otpExpiresAt: null },
+      data: { otpCode: null, otpExpiresAt: null, otpAttempts: 0 },
     });
 
     const token = this.gerarToken(client.id, 'client');
@@ -127,8 +162,8 @@ export class AuthService {
 
   // ─── OTP do cliente por e-mail (paridade com WhatsApp) ────────────
   async enviarOtpClienteEmail(dto: SendClientEmailOtpDto) {
-    const codigo = this.gerarCodigoOtp();
-    const expiracao = new Date(Date.now() + 10 * 60 * 1000);
+    const codigo = gerarCodigoOtp();
+    const expiracao = expiracaoOtp();
 
     // Cliente é identificado por whatsapp (único). Aqui procuramos por email;
     // se não existir client com esse email, criamos um placeholder cujo
@@ -137,7 +172,7 @@ export class AuthService {
     if (existente) {
       await this.prisma.client.update({
         where: { id: existente.id },
-        data: { emailOtpCode: codigo, emailOtpExpiresAt: expiracao, name: dto.name },
+        data: { emailOtpCode: codigo, emailOtpExpiresAt: expiracao, emailOtpAttempts: 0 },
       });
     } else {
       await this.prisma.client.create({
@@ -157,15 +192,29 @@ export class AuthService {
 
   async verificarOtpClienteEmail(dto: VerifyClientEmailOtpDto) {
     const client = await this.prisma.client.findFirst({ where: { email: dto.email } });
-    if (!client || !client.emailOtpCode) throw new BadRequestException('Código inválido ou expirado');
-    if (client.emailOtpCode !== dto.code) throw new BadRequestException('Código OTP incorreto');
+    if (!client || !client.emailOtpCode) throw new BadRequestException(MSG_OTP_INVALIDO);
+
     if (client.emailOtpExpiresAt && client.emailOtpExpiresAt < new Date()) {
-      throw new BadRequestException('Código expirado. Solicite um novo.');
+      await this.limparOtpEmail(client.id);
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    if (client.emailOtpAttempts >= OTP_MAX_ATTEMPTS) {
+      await this.limparOtpEmail(client.id);
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    if (!compararSegredo(client.emailOtpCode, dto.code)) {
+      await this.prisma.client.update({
+        where: { id: client.id },
+        data: { emailOtpAttempts: { increment: 1 } },
+      });
+      throw new BadRequestException(MSG_OTP_INVALIDO);
     }
 
     await this.prisma.client.update({
       where: { id: client.id },
-      data: { emailOtpCode: null, emailOtpExpiresAt: null },
+      data: { emailOtpCode: null, emailOtpExpiresAt: null, emailOtpAttempts: 0 },
     });
 
     const token = this.gerarToken(client.id, 'client');
@@ -217,11 +266,11 @@ export class AuthService {
     });
     if (!client) return { message: 'Se a conta existir, você receberá um link em breve.' };
 
-    const token = crypto.randomBytes(24).toString('hex');
+    const { token, tokenHash } = gerarTokenReset();
     const expira = new Date(Date.now() + 60 * 60 * 1000);
     await this.prisma.client.update({
       where: { id: client.id },
-      data: { passwordResetToken: token, passwordResetExpires: expira },
+      data: { passwordResetToken: tokenHash, passwordResetExpires: expira },
     });
 
     const linkBase = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -243,7 +292,7 @@ export class AuthService {
   async confirmarResetSenhaCliente(dto: ConfirmClientPasswordResetDto) {
     const client = await this.prisma.client.findFirst({
       where: {
-        passwordResetToken: dto.token,
+        passwordResetToken: hashToken(dto.token),
         passwordResetExpires: { gt: new Date() },
       },
     });
@@ -252,7 +301,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.newPassword, 12);
     await this.prisma.client.update({
       where: { id: client.id },
-      data: { passwordHash, passwordResetToken: null, passwordResetExpires: null },
+      data: { passwordHash, passwordResetToken: null, passwordResetExpires: null, otpCode: null, otpExpiresAt: null },
     });
     return { message: 'Senha atualizada com sucesso' };
   }
@@ -260,35 +309,50 @@ export class AuthService {
   // ─── OTP do dono (login via WhatsApp) ─────────────────────────────
   async enviarOtpOwner(dto: SendOwnerOtpDto) {
     const owner = await this.prisma.owner.findFirst({ where: { whatsapp: dto.whatsapp } });
-    if (!owner) {
-      throw new BadRequestException(
-        'Não encontramos uma conta com este WhatsApp. Cadastre-se como funcionário para começar.',
-      );
+
+    // Resposta idêntica exista ou não a conta: antes, a mensagem de erro
+    // permitia varrer números até descobrir quais são de donos cadastrados.
+    if (owner) {
+      const codigo = gerarCodigoOtp();
+      await this.prisma.owner.update({
+        where: { id: owner.id },
+        data: { otpCode: codigo, otpExpiresAt: expiracaoOtp(), otpAttempts: 0 },
+      });
+      try {
+        await this.whatsapp.enviarOtp(owner.whatsapp, codigo);
+      } catch {
+        // Falha de envio não pode virar sinal de existência de conta.
+      }
     }
 
-    const codigo = this.gerarCodigoOtp();
-    const expiracao = new Date(Date.now() + 10 * 60 * 1000);
-
-    await this.prisma.owner.update({
-      where: { id: owner.id },
-      data: { otpCode: codigo, otpExpiresAt: expiracao },
-    });
-    await this.whatsapp.enviarOtp(owner.whatsapp, codigo);
-
-    return { message: 'Código OTP enviado ao seu WhatsApp' };
+    return { message: 'Se houver uma conta com este WhatsApp, o código foi enviado.' };
   }
 
   async verificarOtpOwner(dto: VerifyOwnerOtpDto) {
     const owner = await this.prisma.owner.findFirst({ where: { whatsapp: dto.whatsapp } });
-    if (!owner || !owner.otpCode) throw new BadRequestException('Código inválido ou expirado');
-    if (owner.otpCode !== dto.code) throw new BadRequestException('Código OTP incorreto');
+    if (!owner || !owner.otpCode) throw new BadRequestException(MSG_OTP_INVALIDO);
+
     if (owner.otpExpiresAt && owner.otpExpiresAt < new Date()) {
-      throw new BadRequestException('Código expirado. Solicite um novo.');
+      await this.limparOtpOwner(owner.id);
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    if (owner.otpAttempts >= OTP_MAX_ATTEMPTS) {
+      await this.limparOtpOwner(owner.id);
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    if (!compararSegredo(owner.otpCode, dto.code)) {
+      await this.prisma.owner.update({
+        where: { id: owner.id },
+        data: { otpAttempts: { increment: 1 } },
+      });
+      throw new BadRequestException(MSG_OTP_INVALIDO);
     }
 
     await this.prisma.owner.update({
       where: { id: owner.id },
-      data: { otpCode: null, otpExpiresAt: null },
+      data: { otpCode: null, otpExpiresAt: null, otpAttempts: 0 },
     });
 
     const token = this.gerarToken(owner.id, 'owner');
@@ -312,12 +376,14 @@ export class AuthService {
     // Sempre retorna sucesso para não vazar existência de conta
     if (!owner) return { message: 'Se a conta existir, você receberá um link em breve.' };
 
-    const token = crypto.randomBytes(24).toString('hex');
+    // O banco guarda só o hash. Se o dump vazar, os tokens em trânsito não
+    // servem para tomar conta — o mesmo raciocínio de senha vale aqui.
+    const { token, tokenHash } = gerarTokenReset();
     const expira = new Date(Date.now() + 60 * 60 * 1000); // 1 h
 
     await this.prisma.owner.update({
       where: { id: owner.id },
-      data: { passwordResetToken: token, passwordResetExpires: expira },
+      data: { passwordResetToken: tokenHash, passwordResetExpires: expira },
     });
 
     // Envia via WhatsApp (fluxo do design)
@@ -336,7 +402,7 @@ export class AuthService {
   async confirmarResetSenha(dto: ConfirmPasswordResetDto) {
     const owner = await this.prisma.owner.findFirst({
       where: {
-        passwordResetToken: dto.token,
+        passwordResetToken: hashToken(dto.token),
         passwordResetExpires: { gt: new Date() },
       },
     });
@@ -345,18 +411,35 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.newPassword, 12);
     await this.prisma.owner.update({
       where: { id: owner.id },
-      data: { passwordHash, passwordResetToken: null, passwordResetExpires: null },
+      data: { passwordHash, passwordResetToken: null, passwordResetExpires: null, otpCode: null, otpExpiresAt: null },
     });
 
     return { message: 'Senha atualizada com sucesso' };
   }
 
-  private gerarToken(sub: string, role: 'owner' | 'client') {
-    return this.jwtService.sign({ sub, role });
+  private limparOtpCliente(id: string) {
+    return this.prisma.client.update({
+      where: { id },
+      data: { otpCode: null, otpExpiresAt: null, otpAttempts: 0 },
+    });
   }
 
-  private gerarCodigoOtp(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+  private limparOtpEmail(id: string) {
+    return this.prisma.client.update({
+      where: { id },
+      data: { emailOtpCode: null, emailOtpExpiresAt: null, emailOtpAttempts: 0 },
+    });
+  }
+
+  private limparOtpOwner(id: string) {
+    return this.prisma.owner.update({
+      where: { id },
+      data: { otpCode: null, otpExpiresAt: null, otpAttempts: 0 },
+    });
+  }
+
+  private gerarToken(sub: string, role: 'owner' | 'client') {
+    return this.jwtService.sign({ sub, role });
   }
 
   private sanitizarOwner(owner: any) {
