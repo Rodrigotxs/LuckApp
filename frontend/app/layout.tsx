@@ -9,7 +9,11 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // `maximumScale: 1` impedia o pinch-zoom no celular. Isso quebra a
+  // WCAG 1.4.4 (redimensionamento de texto) e prejudica quem tem baixa
+  // visão, que é justamente parte do público de uma barbearia de bairro.
+  maximumScale: 5,
+  userScalable: true,
   themeColor: '#C0392B',
 };
 
