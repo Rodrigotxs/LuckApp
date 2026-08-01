@@ -154,7 +154,7 @@ export function LuckLogin({ onBack, onEnter, onOwnerOtpSent, onClientOtpSent }: 
           </button>
         </div>
 
-        <LuckSocialButtons />
+        <LuckSocialButtons papel={role} />
 
         {/* Campo de identificação */}
         {method === 'email' ? (

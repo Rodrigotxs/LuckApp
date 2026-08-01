@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, Get, Req, Res, Param, Query, UseGuards, BadRequestException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
@@ -15,6 +15,8 @@ import {
 } from './dto/client-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
+import { SocialAuthService, Papel } from './social/social-auth.service';
+import { ehProviderValido } from './social/social-providers';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
@@ -24,7 +26,58 @@ export class AuthController {
   constructor(
     private authService: AuthService,
     private googleCalendar: GoogleCalendarService,
+    private social: SocialAuthService,
   ) {}
+
+  // ─── Login social (Google / Facebook) ────────────────────────────────
+  //
+  // Atencao: as rotas /auth/google* mais abaixo sao do Google CALENDAR, nao
+  // de login. Sao fluxos OAuth diferentes, com escopos diferentes.
+
+  @Public()
+  @Get('social/providers')
+  @ApiOperation({ summary: 'Provedores de login social configurados neste ambiente' })
+  providersSociais() {
+    // A interface so mostra o botao do que existe de verdade. Botao que nao
+    // leva a lugar nenhum custa mais confianca do que a ausencia dele.
+    return { providers: this.social.providersDisponiveis() };
+  }
+
+  @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @Get('social/:provider')
+  @ApiOperation({ summary: 'Inicia o login social e redireciona ao provedor' })
+  iniciarSocial(
+    @Param('provider') provider: string,
+    @Query('papel') papel: string,
+    @Res() res: any,
+  ) {
+    if (!ehProviderValido(provider)) throw new BadRequestException('Provedor nao suportado');
+    if (papel !== 'client' && papel !== 'owner') {
+      throw new BadRequestException("Informe papel=client ou papel=owner");
+    }
+    return res.redirect(this.social.gerarUrlAutorizacao(provider, papel as Papel));
+  }
+
+  @Public()
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  @Get('social/:provider/callback')
+  @ApiOperation({ summary: 'Callback do provedor social' })
+  async callbackSocial(@Query() query: any, @Res() res: any) {
+    // O usuario clicou em "cancelar" na tela do provedor.
+    if (query.error) {
+      return res.redirect(this.social.urlErro('Login cancelado.'));
+    }
+    try {
+      const resultado = await this.social.concluirLogin(query.state, query.code);
+      return res.redirect(this.social.urlRetorno(resultado));
+    } catch (e: any) {
+      // Erro aqui vira redirect com mensagem, nunca JSON cru numa aba do
+      // navegador — o usuario voltou do provedor esperando ver a aplicacao.
+      const msg = e?.response?.message || e?.message || 'Nao foi possivel entrar.';
+      return res.redirect(this.social.urlErro(String(msg)));
+    }
+  }
 
   @Public()
   @Throttle({ default: { ttl: 60_000, limit: 5 } })

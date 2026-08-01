@@ -78,6 +78,12 @@ describe('cobertura de proteção das rotas', () => {
       [
         'GET /appointments/available-slots',
         'GET /auth/google/callback',
+        // Login social — o inicio e o callback sao publicos por definicao:
+        // quem chama ainda nao tem sessao. A protecao vem do `state` assinado,
+        // nao de guard. Ver SocialAuthService.
+        'GET /auth/social/providers',
+        'GET /auth/social/:provider',
+        'GET /auth/social/:provider/callback',
         'GET /barbers/public/:ownerId',
         'GET /owners/public/default',
         'GET /services/public/:ownerId',

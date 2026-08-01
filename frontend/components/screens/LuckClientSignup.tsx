@@ -62,7 +62,7 @@ export function LuckClientSignup({ onBack, onNext, method, setMethod }: Props) {
         <div style={{ fontSize: 12.5, color: '#888', marginBottom: 20, lineHeight: 1.4 }}>
           Suas informações para confirmar o agendamento.
         </div>
-        <LuckSocialButtons />
+        <LuckSocialButtons papel="client" />
 
         <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 10, padding: 4, marginBottom: 16 }}>
           <button onClick={() => setMethod('whatsapp')} style={{

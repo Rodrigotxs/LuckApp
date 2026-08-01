@@ -76,7 +76,7 @@ export function LuckOwnerSignup({ onBack, onNext, selectedUnitId, setSelectedUni
           Sua <em style={{ color: 'var(--navy)', fontStyle: 'italic' }}>barbearia</em>
         </div>
         <div style={{ fontSize: 12.5, color: '#888', marginBottom: 20 }}>Como seus clientes vão te encontrar.</div>
-        <LuckSocialButtons />
+        <LuckSocialButtons papel="owner" />
 
         <div style={{ display: 'flex', background: 'var(--bg2)', borderRadius: 10, padding: 4, marginBottom: 16 }}>
           <button onClick={() => setMethod('email')} style={{
