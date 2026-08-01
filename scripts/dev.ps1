@@ -5,7 +5,7 @@
 .DESCRIPTION
   Postgres + Redis (Docker), backend NestJS (3001) e frontend Next.js (3000).
   O script e idempotente: pode ser rodado quantas vezes quiser. Ele corrige
-  sozinho o que consegue (env faltando, segredo vazio, deps ausentes,
+  sozinho o que consegue (env faltando, segredo fraco, deps ausentes,
   migration pendente, porta presa) e so pergunta quando a correcao apaga algo.
 
 .PARAMETER SkipSeed
@@ -44,6 +44,40 @@ function Die($msg) {
   exit 1
 }
 
+<#
+  Executa um programa externo sem deixar o PowerShell confundir stderr com erro.
+
+  Este helper existe por um motivo concreto: com $ErrorActionPreference='Stop',
+  o operador `2>&1` transforma cada linha de stderr num ErrorRecord terminante.
+  O Docker escreve o progresso normal ("Network default Creating") em stderr,
+  entao `docker compose up -d 2>&1 | Out-Null` abortava o script com
+  NativeCommandError mesmo tendo funcionado.
+
+  Aqui a preferencia e rebaixada durante a chamada e o sucesso passa a ser
+  julgado unicamente pelo codigo de saida, que e o contrato real de um
+  programa externo.
+#>
+function Invoke-Native {
+  param(
+    [Parameter(Mandatory)][string]$Programa,
+    [string[]]$Argumentos = @(),
+    [switch]$Silencioso
+  )
+
+  $anterior = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {
+    if ($Silencioso) {
+      & $Programa @Argumentos 2>&1 | Out-Null
+    } else {
+      & $Programa @Argumentos 2>&1 | ForEach-Object { Write-Host "       $_" -ForegroundColor DarkGray }
+    }
+    return $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $anterior
+  }
+}
+
 Write-Host @"
 
   BARBEARIA LUCK - ambiente de desenvolvimento
@@ -65,17 +99,31 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
   Die 'Docker nao encontrado. Instale o Docker Desktop e abra ele antes de rodar.'
 }
 
-# O Docker Desktop demora a subir; esperar e melhor que falhar na cara do usuario.
-docker info 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-  Write-Fix 'Docker Desktop parece parado - tentando abrir e aguardando ate 90s...'
-  Start-Process 'Docker Desktop' -ErrorAction SilentlyContinue
-  $esperou = 0
-  while ($LASTEXITCODE -ne 0 -and $esperou -lt 90) {
-    Start-Sleep -Seconds 3; $esperou += 3
-    docker info 2>&1 | Out-Null
+if ((Invoke-Native 'docker' @('info') -Silencioso) -ne 0) {
+  Write-Fix 'Docker Desktop parece parado - tentando abrir e aguardando ate 120s...'
+
+  $caminhos = @(
+    "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
+    "${env:ProgramFiles(x86)}\Docker\Docker\Docker Desktop.exe",
+    "$env:LOCALAPPDATA\Docker\Docker Desktop.exe"
+  ) | Where-Object { Test-Path $_ }
+
+  if ($caminhos) {
+    Start-Process -FilePath $caminhos[0] -ErrorAction SilentlyContinue
+  } else {
+    Write-Warn 'Nao achei o executavel do Docker Desktop - abra manualmente'
   }
-  if ($LASTEXITCODE -ne 0) { Die 'Docker nao respondeu. Abra o Docker Desktop manualmente e rode de novo.' }
+
+  $esperou = 0
+  $subiu = $false
+  while ($esperou -lt 120) {
+    Start-Sleep -Seconds 3
+    $esperou += 3
+    Write-Host '.' -NoNewline
+    if ((Invoke-Native 'docker' @('info') -Silencioso) -eq 0) { $subiu = $true; break }
+  }
+  Write-Host ''
+  if (-not $subiu) { Die 'Docker nao respondeu em 120s. Abra o Docker Desktop e rode de novo.' }
 }
 Write-Ok 'Docker respondendo'
 
@@ -86,34 +134,49 @@ $envPath = Join-Path $BACKEND '.env'
 $envExample = Join-Path $BACKEND '.env.example'
 
 if (-not (Test-Path $envPath)) {
+  if (-not (Test-Path $envExample)) { Die "Nem .env nem .env.example existem em $BACKEND" }
   Copy-Item $envExample $envPath
   Write-Fix '.env criado a partir do .env.example'
 }
 
 $envTexto = Get-Content $envPath -Raw
+if ($null -eq $envTexto) { $envTexto = '' }
 
-# A API recusa subir com segredo vazio ou de exemplo - geramos um real.
-$segredoRuim = ($envTexto -match 'JWT_SECRET\s*=\s*""') -or
-               ($envTexto -match 'JWT_SECRET\s*=\s*"?seu-secret-aqui"?') -or
-               ($envTexto -notmatch 'JWT_SECRET')
+# A API foi endurecida e recusa subir com segredo ausente, de exemplo ou curto.
+# Melhor gerar um real aqui do que deixar o backend morrer na subida.
+$segredoAtual = ''
+if ($envTexto -match 'JWT_SECRET\s*=\s*"?([^"\r\n]*)"?') { $segredoAtual = $Matches[1].Trim() }
+
+$proibidos = @('', 'seu-secret-aqui', 'changeme', 'secret', 'jwt-secret', 'dev', 'test')
+$segredoRuim = ($envTexto -notmatch 'JWT_SECRET') -or
+               ($proibidos -contains $segredoAtual.ToLower()) -or
+               ($segredoAtual.Length -lt 32)
 
 if ($segredoRuim) {
+  $motivo = if ($segredoAtual.Length -gt 0 -and $segredoAtual.Length -lt 32) { 'era curto demais' } else { 'estava vazio ou era de exemplo' }
   $segredo = node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
   if ($envTexto -match 'JWT_SECRET') {
     $envTexto = $envTexto -replace 'JWT_SECRET\s*=.*', "JWT_SECRET=`"$segredo`""
   } else {
-    $envTexto += "`nJWT_SECRET=`"$segredo`""
+    $envTexto = $envTexto.TrimEnd() + "`nJWT_SECRET=`"$segredo`"`n"
   }
   Set-Content -Path $envPath -Value $envTexto -NoNewline
-  Write-Fix 'JWT_SECRET gerado (32 bytes) - a API recusa subir sem um segredo real'
+  Write-Fix "JWT_SECRET gerado - o anterior $motivo"
 } else {
-  Write-Ok 'JWT_SECRET presente'
+  Write-Ok "JWT_SECRET presente ($($segredoAtual.Length) caracteres)"
 }
 
-# CORS_ORIGINS passou a ser lido pela validacao de ambiente.
 if ($envTexto -notmatch 'CORS_ORIGINS') {
   Add-Content -Path $envPath -Value "`nCORS_ORIGINS=`"http://localhost:3000`""
   Write-Fix 'CORS_ORIGINS adicionada'
+} else {
+  Write-Ok 'CORS_ORIGINS presente'
+}
+
+# NODE_ENV=production num ambiente local faz a validacao exigir coisas de
+# producao e o Swagger sumir. Quase sempre e engano.
+if ($envTexto -match 'NODE_ENV\s*=\s*"?production"?') {
+  Write-Warn 'NODE_ENV=production no .env local - o Swagger fica desligado e a validacao fica mais rigida'
 }
 
 # ── 3. banco ─────────────────────────────────────────────────────────────
@@ -125,18 +188,25 @@ try {
     Write-Warn 'Reset pedido - isso APAGA todos os dados do banco local.'
     $r = Read-Host '     Digite RESET para confirmar'
     if ($r -ne 'RESET') { Die 'Cancelado.' }
-    docker compose down -v | Out-Null
+    Invoke-Native 'docker' @('compose', 'down', '-v') -Silencioso | Out-Null
     Write-Fix 'Volumes removidos'
   }
 
-  docker compose up -d 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { Die 'docker compose up falhou. Rode "docker compose up" para ver o erro.' }
+  # O Docker escreve o progresso em stderr; por isso passa pelo Invoke-Native.
+  $codigo = Invoke-Native 'docker' @('compose', 'up', '-d') -Silencioso
+  if ($codigo -ne 0) {
+    Write-Warn 'docker compose up falhou - repetindo com a saida visivel:'
+    Invoke-Native 'docker' @('compose', 'up', '-d') | Out-Null
+    Die 'Nao consegui subir os containers. O erro esta logo acima.'
+  }
+  Write-Ok 'Containers no ar'
 
   Write-Host '  ...  aguardando o Postgres aceitar conexao' -NoNewline
   $pronto = $false
   foreach ($i in 1..60) {
-    docker compose exec -T postgres pg_isready -U postgres 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) { $pronto = $true; break }
+    if ((Invoke-Native 'docker' @('compose', 'exec', '-T', 'postgres', 'pg_isready', '-U', 'postgres') -Silencioso) -eq 0) {
+      $pronto = $true; break
+    }
     Start-Sleep -Seconds 1
     Write-Host '.' -NoNewline
   }
@@ -152,24 +222,29 @@ Push-Location $BACKEND
 try {
   if (-not (Test-Path (Join-Path $BACKEND 'node_modules'))) {
     Write-Fix 'node_modules ausente - instalando (pode demorar alguns minutos)'
-    npm install
-    if ($LASTEXITCODE -ne 0) { Die 'npm install do backend falhou' }
+    if ((Invoke-Native 'npm' @('install')) -ne 0) { Die 'npm install do backend falhou' }
   }
   Write-Ok 'Dependencias instaladas'
 
   # O client do Prisma e gerado; sem ele o backend nao sobe.
-  npx prisma generate 2>&1 | Out-Null
-  if ($LASTEXITCODE -ne 0) { Die 'prisma generate falhou. Se for bloqueio de rede, verifique proxy/firewall.' }
+  if ((Invoke-Native 'npx' @('prisma', 'generate') -Silencioso) -ne 0) {
+    Write-Warn 'prisma generate falhou - repetindo com a saida visivel:'
+    Invoke-Native 'npx' @('prisma', 'generate') | Out-Null
+    Die 'prisma generate falhou. Se o erro citar binaries.prisma.sh, e bloqueio de rede (proxy/firewall).'
+  }
   Write-Ok 'Prisma client gerado'
 
-  npx prisma migrate deploy
-  if ($LASTEXITCODE -ne 0) { Die 'prisma migrate deploy falhou. Veja o erro acima.' }
+  if ((Invoke-Native 'npx' @('prisma', 'migrate', 'deploy')) -ne 0) {
+    Die 'prisma migrate deploy falhou. Se o erro for de drift, ".\dev.cmd -Reset" recria o banco (apaga os dados).'
+  }
   Write-Ok 'Migrations aplicadas'
 
   if (-not $SkipSeed) {
-    npx prisma db seed 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) { Write-Ok 'Seed aplicado' }
-    else { Write-Warn 'Seed nao rodou (provavelmente ja existia) - seguindo' }
+    if ((Invoke-Native 'npx' @('prisma', 'db', 'seed') -Silencioso) -eq 0) {
+      Write-Ok 'Seed aplicado'
+    } else {
+      Write-Warn 'Seed nao rodou (provavelmente ja existia) - seguindo'
+    }
   }
 } finally { Pop-Location }
 
@@ -180,8 +255,7 @@ Push-Location $FRONTEND
 try {
   if (-not (Test-Path (Join-Path $FRONTEND 'node_modules'))) {
     Write-Fix 'node_modules ausente - instalando'
-    npm install
-    if ($LASTEXITCODE -ne 0) { Die 'npm install do frontend falhou' }
+    if ((Invoke-Native 'npm' @('install')) -ne 0) { Die 'npm install do frontend falhou' }
   }
   Write-Ok 'Dependencias instaladas'
 } finally { Pop-Location }
@@ -190,7 +264,14 @@ try {
 Write-Step '6/6  Subindo os servidores'
 
 function Liberar-Porta($porta, $nome) {
-  $conexoes = Get-NetTCPConnection -LocalPort $porta -State Listen -ErrorAction SilentlyContinue
+  $conexoes = $null
+  try {
+    $conexoes = Get-NetTCPConnection -LocalPort $porta -State Listen -ErrorAction SilentlyContinue
+  } catch {
+    # Get-NetTCPConnection nao existe em toda edicao do Windows.
+    Write-Warn "Nao consegui checar a porta $porta - se der EADDRINUSE, feche o processo manualmente"
+    return
+  }
   if (-not $conexoes) { return }
 
   foreach ($c in $conexoes) {
@@ -225,7 +306,7 @@ function Esperar-Url($url, $segundos) {
       Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2 | Out-Null
       return $true
     } catch {
-      # 4xx tambem significa que ha alguem escutando.
+      # Um 4xx tambem significa que ha alguem escutando na porta.
       if ($_.Exception.Response) { return $true }
     }
     Start-Sleep -Seconds 1
