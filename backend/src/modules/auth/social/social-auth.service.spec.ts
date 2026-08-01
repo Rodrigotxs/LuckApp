@@ -56,6 +56,24 @@ describe('SocialAuthService', () => {
       expect(service.estaConfigurado('facebook')).toBe(false);
     });
 
+    it('fora de producao, diz QUAIS variaveis faltam', () => {
+      // Regressao: a secao inteira sumia sem explicacao, e quem estava
+      // montando o ambiente achava que tinha quebrado alguma coisa.
+      config.get.mockImplementation((k: string) => (k.startsWith('GOOGLE') ? undefined : ENV[k]));
+      expect(service.providersPendentes()).toEqual([
+        { id: 'google', nome: 'Google', faltando: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'] },
+      ]);
+    });
+
+    it('em producao NAO expoe o que falta configurar', () => {
+      // Detalhe de infraestrutura nao interessa ao usuario final, e provedor
+      // nao configurado simplesmente nao existe para ele.
+      config.get.mockImplementation((k: string) =>
+        k === 'NODE_ENV' ? 'production' : k.startsWith('GOOGLE') ? undefined : ENV[k],
+      );
+      expect(service.providersPendentes()).toEqual([]);
+    });
+
     it('recusa iniciar login em provedor nao configurado', () => {
       config.get.mockImplementation((k: string) => (k.startsWith('GOOGLE') ? undefined : ENV[k]));
       expect(() => service.gerarUrlAutorizacao('google', 'client')).toThrow(/não está configurado/);

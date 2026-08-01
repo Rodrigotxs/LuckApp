@@ -7,6 +7,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 type Papel = 'client' | 'owner';
 type Provider = { id: 'google' | 'facebook'; nome: string };
+type Pendente = { id: string; nome: string; faltando: string[] };
 
 interface Props {
   /** Papel que a tela está cadastrando/autenticando. */
@@ -23,19 +24,58 @@ interface Props {
  */
 export function LuckSocialButtons({ papel }: Props) {
   const [providers, setProviders] = useState<Provider[] | null>(null);
+  const [pendentes, setPendentes] = useState<Pendente[]>([]);
   const [indo, setIndo] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
     api
       .get('/auth/social/providers')
-      .then((r) => { if (ativo) setProviders(r.data?.providers ?? []); })
-      .catch(() => { if (ativo) setProviders([]); });
+      .then((r) => {
+        if (!ativo) return;
+        setProviders(r.data?.providers ?? []);
+        setPendentes(r.data?.pendentes ?? []);
+      })
+      .catch(() => { if (ativo) { setProviders([]); setPendentes([]); } });
     return () => { ativo = false; };
   }, []);
 
   // Enquanto consulta, não ocupa espaço — evita o layout pular.
-  if (providers === null || providers.length === 0) return null;
+  if (providers === null) return null;
+
+  /*
+   * Nada configurado.
+   *
+   * Em produção o backend devolve `pendentes` vazio e a seção some por
+   * inteiro — é o comportamento certo para o usuário final. Em
+   * desenvolvimento ele diz o que falta, porque a seção sumir calada faz
+   * quem está montando o ambiente achar que quebrou.
+   */
+  if (providers.length === 0) {
+    if (pendentes.length === 0) return null;
+    return (
+      <div
+        style={{
+          marginBottom: 18, padding: '10px 12px', borderRadius: 8,
+          border: '1px dashed var(--gray)', background: 'var(--bg2)',
+          fontSize: 11.5, color: '#666', lineHeight: 1.5,
+        }}
+      >
+        <strong style={{ color: 'var(--ink)' }}>Login social desligado</strong> (só em desenvolvimento).
+        <br />
+        Preencha no <code>backend/.env</code> e reinicie a API:
+        <br />
+        {pendentes.map((p) => (
+          <span key={p.id} style={{ display: 'block', marginTop: 4 }}>
+            {p.nome}: <code>{p.faltando.join('</code>, <code>')}</code>
+          </span>
+        ))}
+        <span style={{ display: 'block', marginTop: 6, opacity: 0.8 }}>
+          Passo a passo em LOGIN-SOCIAL.md
+        </span>
+      </div>
+    );
+  }
 
   const entrar = (id: string) => {
     setIndo(id);

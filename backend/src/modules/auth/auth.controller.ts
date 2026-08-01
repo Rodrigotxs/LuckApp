@@ -40,7 +40,13 @@ export class AuthController {
   providersSociais() {
     // A interface so mostra o botao do que existe de verdade. Botao que nao
     // leva a lugar nenhum custa mais confianca do que a ausencia dele.
-    return { providers: this.social.providersDisponiveis() };
+    // `pendentes` vem vazio em producao — la o provedor sem credencial
+    // simplesmente nao existe. Fora de producao ele diz o que falta, para a
+    // secao nao sumir em silencio de quem esta montando o ambiente.
+    return {
+      providers: this.social.providersDisponiveis(),
+      pendentes: this.social.providersPendentes(),
+    };
   }
 
   @Public()

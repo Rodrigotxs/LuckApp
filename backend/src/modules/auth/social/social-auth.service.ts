@@ -43,6 +43,29 @@ export class SocialAuthService {
       .map((id) => ({ id, nome: PROVIDERS[id].nome }));
   }
 
+  /**
+   * Provedores que existem no código mas estão sem credencial.
+   *
+   * Só é exposto fora de produção. Em produção, provedor não configurado
+   * simplesmente não existe para o usuário — botão morto ou explicação de
+   * configuração interna não ajuda ninguém e entrega detalhe de infraestrutura.
+   *
+   * Em desenvolvimento é o contrário: a seção inteira sumir sem dizer por quê
+   * faz quem está montando o ambiente achar que quebrou alguma coisa.
+   */
+  providersPendentes() {
+    if (this.config.get('NODE_ENV') === 'production') return [];
+    return (Object.keys(PROVIDERS) as ProviderId[])
+      .filter((id) => !this.estaConfigurado(id))
+      .map((id) => ({
+        id,
+        nome: PROVIDERS[id].nome,
+        faltando: [PROVIDERS[id].envClientId, PROVIDERS[id].envClientSecret].filter(
+          (v) => !this.config.get(v),
+        ),
+      }));
+  }
+
   private redirectUri(provider: ProviderId): string {
     const base = this.config.get<string>('API_PUBLIC_URL') || `http://localhost:${this.config.get('PORT') || 3001}`;
     return `${base.replace(/\/$/, '')}/auth/social/${provider}/callback`;
