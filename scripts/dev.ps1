@@ -321,6 +321,32 @@ try {
   }
   Write-Ok 'Prisma client gerado'
 
+  <#
+    Pre-voo antes de migrar.
+
+    A migration de hardening cria e-mail unico e a constraint anti-sobreposicao.
+    Constraint nao nasce sobre dado que ja a viola, entao a migration limpa
+    antes: zera e-mail duplicado e apaga o agendamento mais novo de cada par
+    sobreposto. Em banco de desenvolvimento isso quase sempre nao custa nada —
+    mas "quase sempre" nao e garantia, e apagar linha sem avisar nao se faz.
+  #>
+  $prevoo = Join-Path $BACKEND 'scripts\verificar-antes-de-migrar.js'
+  if (Test-Path $prevoo) {
+    $codigoPrevoo = Invoke-Native 'node' @($prevoo)
+    if ($codigoPrevoo -eq 2) {
+      Write-Host ''
+      Write-Warn 'A migration vai remover os dados listados acima.'
+      $resposta = Read-Host '     Digite SIM para continuar, ou qualquer outra coisa para parar'
+      if ($resposta -ne 'SIM') {
+        Write-Host ''
+        Write-Host '  Parado a seu pedido. Para guardar o estado atual antes de tentar de novo:' -ForegroundColor Yellow
+        Write-Host '    docker exec barbearia_luck_db pg_dump -U postgres barbearia_luck > backup.sql' -ForegroundColor Yellow
+        Write-Host ''
+        Die 'Migration cancelada.'
+      }
+    }
+  }
+
   if ((Invoke-Native 'npx' @('prisma', 'migrate', 'deploy')) -ne 0) {
     Write-Host ''
     Write-Host '  P1001 "can''t reach database"  -> confira a DATABASE_URL no backend\.env.' -ForegroundColor Yellow

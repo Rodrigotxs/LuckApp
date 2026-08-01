@@ -17,7 +17,8 @@
     "test:db": "jest --testPathPattern=integration",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.ts\" \"test/**/*.ts\"",
-    "lint:fix": "eslint \"src/**/*.ts\" --fix"
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "db:prevoo": "node scripts/verificar-antes-de-migrar.js"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
