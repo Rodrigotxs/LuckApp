@@ -9,6 +9,13 @@ type Papel = 'client' | 'owner';
 type Provider = { id: 'google' | 'facebook'; nome: string };
 type Pendente = { id: string; nome: string; faltando: string[] };
 
+/** Por que os botões não estão na tela. */
+type Diagnostico =
+  | { tipo: 'carregando' }
+  | { tipo: 'ok'; providers: Provider[] }
+  | { tipo: 'sem-credencial'; pendentes: Pendente[] }
+  | { tipo: 'falha-rede'; causa: string; comoResolver: string };
+
 interface Props {
   /** Papel que a tela está cadastrando/autenticando. */
   papel: Papel;
@@ -18,62 +25,82 @@ interface Props {
  * Botões de login social.
  *
  * Só renderiza o provedor que o backend confirma estar configurado. A versão
- * anterior desenhava Google e Facebook sempre e apenas simulava — mostrava
+ * original desenhava Google e Facebook sempre e apenas simulava — mostrava
  * "Conectando com Google..." por 1,8 s e não fazia nada. Botão que promete e
  * não entrega custa mais confiança do que a ausência dele.
+ *
+ * Fora de produção, quando não há botão, a tela diz por quê. Duas causas são
+ * distinguidas de propósito: credencial ausente e falha de rede. Antes as
+ * duas caíam no mesmo `catch` e viravam silêncio idêntico — o que fazia
+ * "API fora do ar" parecer "não configurado", e mandava quem estava
+ * depurando procurar no lugar errado.
  */
 export function LuckSocialButtons({ papel }: Props) {
-  const [providers, setProviders] = useState<Provider[] | null>(null);
-  const [pendentes, setPendentes] = useState<Pendente[]>([]);
+  const [estado, setEstado] = useState<Diagnostico>({ tipo: 'carregando' });
   const [indo, setIndo] = useState<string | null>(null);
 
   useEffect(() => {
     let ativo = true;
+
     api
-      .get('/auth/social/providers')
+      .get('/auth/social/providers', { timeout: 8000 })
       .then((r) => {
         if (!ativo) return;
-        setProviders(r.data?.providers ?? []);
-        setPendentes(r.data?.pendentes ?? []);
+        const providers: Provider[] = r.data?.providers ?? [];
+        setEstado(
+          providers.length > 0
+            ? { tipo: 'ok', providers }
+            : { tipo: 'sem-credencial', pendentes: r.data?.pendentes ?? [] },
+        );
       })
-      .catch(() => { if (ativo) { setProviders([]); setPendentes([]); } });
+      .catch((e) => {
+        if (!ativo) return;
+        setEstado({ tipo: 'falha-rede', ...diagnosticarRede(e) });
+      });
+
     return () => { ativo = false; };
   }, []);
 
-  // Enquanto consulta, não ocupa espaço — evita o layout pular.
-  if (providers === null) return null;
+  if (estado.tipo === 'carregando') return null;
 
-  /*
-   * Nada configurado.
-   *
-   * Em produção o backend devolve `pendentes` vazio e a seção some por
-   * inteiro — é o comportamento certo para o usuário final. Em
-   * desenvolvimento ele diz o que falta, porque a seção sumir calada faz
-   * quem está montando o ambiente achar que quebrou.
-   */
-  if (providers.length === 0) {
-    if (pendentes.length === 0) return null;
+  if (estado.tipo === 'sem-credencial') {
+    if (estado.pendentes.length === 0) return null; // produção: some por inteiro
     return (
-      <div
-        style={{
-          marginBottom: 18, padding: '10px 12px', borderRadius: 8,
-          border: '1px dashed var(--gray)', background: 'var(--bg2)',
-          fontSize: 11.5, color: '#666', lineHeight: 1.5,
-        }}
-      >
-        <strong style={{ color: 'var(--ink)' }}>Login social desligado</strong> (só em desenvolvimento).
-        <br />
-        Preencha no <code>backend/.env</code> e reinicie a API:
-        <br />
-        {pendentes.map((p) => (
-          <span key={p.id} style={{ display: 'block', marginTop: 4 }}>
-            {p.nome}: <code>{p.faltando.join('</code>, <code>')}</code>
-          </span>
-        ))}
-        <span style={{ display: 'block', marginTop: 6, opacity: 0.8 }}>
-          Passo a passo em LOGIN-SOCIAL.md
-        </span>
-      </div>
+      <NotaDev titulo="Login social desligado">
+        Defina em <Mono>backend/.env</Mono> e reinicie a API:
+        <ul style={estilos.lista}>
+          {estado.pendentes.map((p) => (
+            <li key={p.id} style={estilos.itemLista}>
+              <span style={estilos.rotuloProvedor}>{p.nome}</span>
+              {/*
+                Cada variável é um elemento próprio.
+                Já esteve como `faltando.join('</code>, <code>')`, que monta uma
+                string com HTML dentro — e o React escapa isso por segurança,
+                então as tags apareciam literais na tela.
+              */}
+              {p.faltando.map((v, i) => (
+                <span key={v}>
+                  {i > 0 && <span style={{ color: 'var(--gray)' }}>, </span>}
+                  <Mono>{v}</Mono>
+                </span>
+              ))}
+            </li>
+          ))}
+        </ul>
+        <span style={estilos.rodape}>Passo a passo em LOGIN-SOCIAL.md</span>
+      </NotaDev>
+    );
+  }
+
+  if (estado.tipo === 'falha-rede') {
+    // Em produção o usuário não tem o que fazer com isso — some, e o detalhe
+    // fica só no console para quem estiver investigando.
+    if (process.env.NODE_ENV === 'production') return null;
+    return (
+      <NotaDev titulo="Não consegui falar com a API" tom="alerta">
+        {estado.causa}
+        <span style={estilos.rodape}>{estado.comoResolver}</span>
+      </NotaDev>
     );
   }
 
@@ -86,7 +113,7 @@ export function LuckSocialButtons({ papel }: Props) {
     window.location.href = `${API_URL}/auth/social/${id}?papel=${papel}`;
   };
 
-  const estilos: Record<string, React.CSSProperties> = {
+  const cores: Record<string, React.CSSProperties> = {
     google: { border: '1.5px solid var(--gray-soft)', background: 'white', color: 'var(--ink)' },
     facebook: { border: 'none', background: '#1877F2', color: 'white' },
   };
@@ -94,21 +121,20 @@ export function LuckSocialButtons({ papel }: Props) {
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {providers.map((p) => (
+        {estado.providers.map((p) => (
           <button
             key={p.id}
             type="button"
             onClick={() => entrar(p.id)}
             disabled={indo !== null}
             className="lk-press"
-            aria-label={`Continuar com ${p.nome}`}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
               padding: '12px', borderRadius: 10, minHeight: 44,
               cursor: indo ? 'wait' : 'pointer', fontFamily: 'inherit',
               fontSize: 13, fontWeight: 600,
               opacity: indo && indo !== p.id ? 0.5 : 1,
-              ...estilos[p.id],
+              ...cores[p.id],
             }}
           >
             {p.id === 'google' ? <IconeGoogle /> : <IconeFacebook />}
@@ -119,10 +145,127 @@ export function LuckSocialButtons({ papel }: Props) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0' }}>
         <div style={{ flex: 1, height: 1, background: 'var(--gray-soft)' }} />
-        <span style={{ fontSize: 10.5, color: '#999', fontWeight: 700, letterSpacing: '0.06em' }}>OU</span>
+        <span style={{ fontSize: 10.5, color: '#6A6A6A', fontWeight: 700, letterSpacing: '0.06em' }}>OU</span>
         <div style={{ flex: 1, height: 1, background: 'var(--gray-soft)' }} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Traduz a falha do axios em causa e conserto.
+ *
+ * "Erro ao carregar" não ajuda ninguém. Um erro útil diz o que aconteceu, por
+ * que, e o que fazer agora.
+ */
+function diagnosticarRede(e: any): { causa: string; comoResolver: string } {
+  const paginaSegura = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+  // Conteúdo misto: página em HTTPS chamando API em HTTP. O navegador bloqueia
+  // antes de sair da máquina, e a falha não aparece na aba de rede como erro
+  // de servidor — some sem explicação.
+  if (paginaSegura && API_URL.startsWith('http://')) {
+    return {
+      causa: `A página está em HTTPS e a API em HTTP (${API_URL}).`,
+      comoResolver: 'O navegador bloqueia conteúdo misto. Aponte NEXT_PUBLIC_API_URL para uma URL https.',
+    };
+  }
+
+  if (e?.code === 'ECONNABORTED') {
+    return {
+      causa: `A API em ${API_URL} não respondeu em 8 s.`,
+      comoResolver: 'Veja a janela "Luck API". Se estiver subindo ainda, recarregue em instantes.',
+    };
+  }
+
+  // Houve resposta HTTP: a rede está boa, o problema é a rota.
+  if (e?.response) {
+    const s = e.response.status;
+    if (s === 404) {
+      return {
+        causa: 'A API respondeu 404 em /auth/social/providers.',
+        comoResolver: 'A rota é nova — reinicie a API para carregá-la.',
+      };
+    }
+    return {
+      causa: `A API respondeu ${s} em /auth/social/providers.`,
+      comoResolver: 'Veja o log do backend para o erro completo.',
+    };
+  }
+
+  // Sem resposta nenhuma: ou não há ninguém escutando, ou o CORS barrou a
+  // resposta antes de o JavaScript conseguir lê-la. Do lado do navegador as
+  // duas são indistinguíveis — por isso a mensagem cobre as duas.
+  return {
+    causa: `Nenhuma resposta de ${API_URL}.`,
+    comoResolver: 'A API está no ar? Se estiver, confira CORS_ORIGINS no backend/.env — precisa incluir a origem desta página.',
+  };
+}
+
+const estilos: Record<string, React.CSSProperties> = {
+  lista: { listStyle: 'none', margin: '6px 0 0', padding: 0 },
+  itemLista: { marginTop: 3, wordBreak: 'break-word' },
+  rotuloProvedor: { fontWeight: 600, color: 'var(--ink)', marginRight: 6 },
+  rodape: { display: 'block', marginTop: 8, color: '#6A6A6A' },
+};
+
+/**
+ * Aviso destinado a quem desenvolve, não a quem usa.
+ *
+ * Fica visualmente rebaixado de propósito: sem preenchimento de cor forte e
+ * com uma faixa lateral discreta, para não competir com o formulário de login,
+ * que é a tarefa principal da tela. Contraste do texto mantido acima de 4.5:1
+ * mesmo sendo secundário — nota ilegível não é discreta, é inútil.
+ */
+function NotaDev({
+  titulo,
+  tom = 'neutro',
+  children,
+}: {
+  titulo: string;
+  tom?: 'neutro' | 'alerta';
+  children: React.ReactNode;
+}) {
+  const cor = tom === 'alerta' ? 'var(--red)' : 'var(--navy)';
+  return (
+    <div
+      role="note"
+      style={{
+        marginBottom: 16,
+        padding: '10px 12px',
+        borderLeft: `3px solid ${cor}`,
+        background: 'var(--bg2)',
+        borderRadius: '0 6px 6px 0',
+        fontSize: 12.5,
+        lineHeight: 1.55,
+        color: '#5A5A5A',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 2 }}>
+        <strong style={{ color: cor, fontSize: 12.5 }}>{titulo}</strong>
+        <span style={{ fontSize: 10, color: '#6A6A6A', letterSpacing: '0.04em' }}>
+          SÓ EM DESENVOLVIMENTO
+        </span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Mono({ children }: { children: React.ReactNode }) {
+  return (
+    <code
+      style={{
+        fontFamily: 'var(--font-mono, ui-monospace, Menlo, monospace)',
+        fontSize: 11.5,
+        background: 'rgba(0,0,0,0.05)',
+        padding: '1px 5px',
+        borderRadius: 4,
+        color: 'var(--ink)',
+      }}
+    >
+      {children}
+    </code>
   );
 }
 
