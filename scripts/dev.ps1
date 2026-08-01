@@ -166,9 +166,15 @@ $segredoAtual = ''
 if ($envTexto -match 'JWT_SECRET\s*=\s*"?([^"\r\n]*)"?') { $segredoAtual = $Matches[1].Trim() }
 
 $proibidos = @('', 'seu-secret-aqui', 'changeme', 'secret', 'jwt-secret', 'dev', 'test')
+
+# Um segredo pode ter 32+ caracteres e ainda assim ser obviamente descartavel.
+# Palavra em texto claro dizendo "nao use isso" e sinal suficiente.
+$pareceDescartavel = $segredoAtual -match '(?i)(dev-only|nao-usar|not-for-prod|example|placeholder|troque|change-?me)'
+
 $segredoRuim = ($envTexto -notmatch 'JWT_SECRET') -or
                ($proibidos -contains $segredoAtual.ToLower()) -or
-               ($segredoAtual.Length -lt 32)
+               ($segredoAtual.Length -lt 32) -or
+               $pareceDescartavel
 
 if ($segredoRuim) {
   $motivo = if ($segredoAtual.Length -gt 0 -and $segredoAtual.Length -lt 32) { 'era curto demais' } else { 'estava vazio ou era de exemplo' }
@@ -195,6 +201,39 @@ if ($envTexto -notmatch 'CORS_ORIGINS') {
 # producao e o Swagger sumir. Quase sempre e engano.
 if ($envTexto -match 'NODE_ENV\s*=\s*"?production"?') {
   Write-Warn 'NODE_ENV=production no .env local - o Swagger fica desligado e a validacao fica mais rigida'
+}
+
+<#
+  A DATABASE_URL precisa apontar para o Postgres que o compose sobe.
+
+  Isto ja quebrou de verdade: um .env trazido de outra maquina apontava para
+  a porta 5433, o compose subia o banco na 5432, e a falha so aparecia la na
+  frente no 'prisma migrate deploy' com um P1001 generico. Conferir aqui custa
+  nada e transforma um erro obscuro num aviso claro.
+#>
+$portaCompose = '5432'
+$composePath = Join-Path $ROOT 'docker-compose.yml'
+if (Test-Path $composePath) {
+  $composeTexto = Get-Content $composePath -Raw
+  if ($composeTexto -match "(?m)^\s*-\s*'?(\d+):5432'?") { $portaCompose = $Matches[1] }
+}
+
+if ($envTexto -match 'DATABASE_URL\s*=\s*"?([^"\r\n]+)"?') {
+  $urlBanco = $Matches[1]
+  if ($urlBanco -match '@[^:/]+:(\d+)/') {
+    $portaEnv = $Matches[1]
+    if ($portaEnv -ne $portaCompose) {
+      Write-Warn "DATABASE_URL aponta para a porta $portaEnv, mas o docker-compose publica a $portaCompose"
+      Write-Warn 'Corrigindo para bater com o compose - se voce usa um Postgres proprio, edite o .env depois'
+      $envTexto = $envTexto -replace '(DATABASE_URL\s*=\s*"?[^"\r\n]*@[^:/]+):\d+/', "`${1}:$portaCompose/"
+      Set-Content -Path $envPath -Value $envTexto -NoNewline
+      Write-Fix "DATABASE_URL ajustada para a porta $portaCompose"
+    } else {
+      Write-Ok "DATABASE_URL na porta $portaCompose, batendo com o compose"
+    }
+  }
+} else {
+  Die 'DATABASE_URL ausente no .env'
 }
 
 # ── 3. banco ─────────────────────────────────────────────────────────────
@@ -283,7 +322,13 @@ try {
   Write-Ok 'Prisma client gerado'
 
   if ((Invoke-Native 'npx' @('prisma', 'migrate', 'deploy')) -ne 0) {
-    Die 'prisma migrate deploy falhou. Se o erro for de drift, ".\dev.cmd -Reset" recria o banco (apaga os dados).'
+    Write-Host ''
+    Write-Host '  P1001 "can''t reach database"  -> confira a DATABASE_URL no backend\.env.' -ForegroundColor Yellow
+    Write-Host '                                    Ela precisa apontar para localhost:' -NoNewline -ForegroundColor Yellow
+    Write-Host "$portaCompose, que e o que o compose publica." -ForegroundColor Yellow
+    Write-Host '  Erro de drift                 -> ".\dev.cmd -Reset" recria o banco (APAGA os dados).' -ForegroundColor Yellow
+    Write-Host ''
+    Die 'prisma migrate deploy falhou.'
   }
   Write-Ok 'Migrations aplicadas'
 
