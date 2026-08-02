@@ -130,7 +130,7 @@ describe('SocialAuthService', () => {
       prisma.owner.findUnique.mockResolvedValue(null);
       prisma.owner.create.mockImplementation(async ({ data }: any) => ({ id: 'o1', ...data }));
 
-      const r = await service.concluirLogin('state', 'code');
+      const r: any = await service.concluirLogin('state', 'code');
 
       expect(r.papel).toBe('owner');
       expect(prisma.client.create).not.toHaveBeenCalled();
@@ -148,7 +148,7 @@ describe('SocialAuthService', () => {
       perfilDoProvedor(GOOGLE_VERIFICADO);
       prisma.client.findFirst.mockResolvedValue({ id: 'c1', name: 'Ana', whatsapp: '5511999' });
 
-      const r = await service.concluirLogin('state', 'code');
+      const r: any = await service.concluirLogin('state', 'code');
 
       expect(r.user.id).toBe('c1');
       expect(r.novo).toBe(false);
@@ -187,7 +187,7 @@ describe('SocialAuthService', () => {
       prisma.client.findFirst.mockResolvedValue(null);
       prisma.client.create.mockImplementation(async ({ data }: any) => ({ id: 'novo', ...data }));
 
-      const r = await service.concluirLogin('state', 'code');
+      const r: any = await service.concluirLogin('state', 'code');
 
       expect(r.novo).toBe(true);
       expect(prisma.client.create.mock.calls[0][0].data).toMatchObject({
@@ -205,7 +205,7 @@ describe('SocialAuthService', () => {
       prisma.client.findFirst.mockResolvedValue(null);
       prisma.client.create.mockImplementation(async ({ data }: any) => ({ id: 'novo', ...data }));
 
-      const r = await service.concluirLogin('state', 'code');
+      const r: any = await service.concluirLogin('state', 'code');
 
       expect(r.user.whatsapp).toBe('email:ana@x.com');
       expect(r.cadastroIncompleto).toBe(true);
@@ -216,7 +216,7 @@ describe('SocialAuthService', () => {
       prisma.client.findFirst.mockResolvedValue(null);
       prisma.client.create.mockImplementation(async ({ data }: any) => ({ id: 'novo', ...data }));
 
-      const r = await service.concluirLogin('state', 'code');
+      const r: any = await service.concluirLogin('state', 'code');
 
       expect(r.user.whatsapp).toBe('google:g-999');
       expect(prisma.client.create.mock.calls[0][0].data.emailVerificado).toBe(false);
@@ -230,7 +230,7 @@ describe('SocialAuthService', () => {
       perfilDoProvedor(GOOGLE_VERIFICADO);
       prisma.owner.findFirst.mockResolvedValue({ id: 'o1', name: 'Ana', passwordHash: 'h', barbershopAddress: 'R X', whatsapp: '55' });
 
-      const r = await service.concluirLogin('state', 'code');
+      const r: any = await service.concluirLogin('state', 'code');
 
       expect(r.user.id).toBe('o1');
       expect(r.user.temSenha).toBe(true);
@@ -270,7 +270,7 @@ describe('SocialAuthService', () => {
       prisma.owner.findUnique.mockResolvedValue(null);
       prisma.owner.create.mockImplementation(async ({ data }: any) => ({ id: 'o1', ...data }));
 
-      const r = await service.concluirLogin('state', 'code');
+      const r: any = await service.concluirLogin('state', 'code');
 
       expect(prisma.owner.create.mock.calls[0][0].data.passwordHash).toBeNull();
       expect(r.user.temSenha).toBe(false);
@@ -285,7 +285,7 @@ describe('SocialAuthService', () => {
         id: 'c1', name: 'Ana', whatsapp: '5511', passwordHash: '$2a$12$abc', otpCode: '123456',
       });
 
-      const r = await service.concluirLogin('state', 'code');
+      const r: any = await service.concluirLogin('state', 'code');
       const serializado = JSON.stringify(r);
 
       expect(serializado).not.toContain('$2a$');
