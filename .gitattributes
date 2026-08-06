@@ -1,0 +1,34 @@
+# Normalização de fim de linha.
+#
+# Sem este arquivo, quem edita no Windows grava CRLF e o git marca o arquivo
+# como modificado mesmo sem nenhuma alteração de conteúdo. Isso já custou tempo
+# aqui: uma leva de arquivos apareceu como "alterada" e escondeu quais eram as
+# mudanças de verdade.
+#
+# `text=auto` faz o git guardar sempre LF no repositório e entregar o fim de
+# linha nativo na hora do checkout. O histórico fica limpo independente de quem
+# edita em qual sistema.
+* text=auto
+
+# Scripts que só rodam no Windows precisam de CRLF no disco.
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+*.ps1  text eol=crlf
+
+# Shell script quebra se receber CRLF — o interpretador lê o \r como parte do
+# comando e reclama de "bad interpreter".
+*.sh   text eol=lf
+
+# Binário: nunca converter, nunca tentar fazer diff de texto.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
+*.bundle binary
+
+# Arquivo gerado: some do diff do pull request, mas continua versionado.
+package-lock.json linguist-generated=true -diff
