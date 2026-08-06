@@ -45,5 +45,8 @@ Thumbs.db
 backup-antes-do-push-*/
 _probe_*
 APLICAR.md
+VERSIONAR.md
+PR.md
+COMMITS.md
 push.cmd
 scripts/push.ps1
