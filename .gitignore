@@ -1,0 +1,54 @@
+# ─── Dependências e build ────────────────────────────────────────────────
+node_modules/
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# ─── Segredos ────────────────────────────────────────────────────────────
+# Nunca versionar. O .env.example fica, como referência sem valor real.
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+
+# ─── Testes e log ────────────────────────────────────────────────────────
+coverage/
+*.log
+npm-debug.log*
+playwright-report/
+test-results/
+.playwright/
+
+# ─── Banco local ─────────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+
+# ─── Editor e sistema ────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ─── Andaime de entrega ──────────────────────────────────────────────────
+# Arquivos de apoio que circulam entre máquinas mas não fazem parte do
+# projeto. Ficam aqui para que um `git add -A` distraído não os arraste para
+# dentro do histórico.
+*.bundle
+backup-antes-do-push-*/
+_probe_*
+APLICAR.md
+VERSIONAR.md
+PR.md
+COMMITS.md
+PROXIMOS-PASSOS.md
+RELATORIO-TESTES.html
+push.cmd
+scripts/push.ps1

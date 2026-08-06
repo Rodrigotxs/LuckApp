@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Owner {
+  id                   String              @id @default(uuid())
+  name                 String
+  email                String              @unique
+  // Nulavel: dono que entrou por Google/Facebook nunca escolheu senha.
+  // Gravar hash de string aleatoria criaria uma senha que ninguem conhece
+  // mas que existe — alvo sem dono.
+  passwordHash         String?
+  whatsapp             String
+  barbershopName       String
+  barbershopAddress    String?
+  zipCode              String?
+  logoUrl              String?
+  googleAccessToken    String?
+  googleRefreshToken   String?
+  googleTokenExpiresAt DateTime?
+  monthlyGoal          Float?
+  // Login social — ids unicos por provedor, permitindo vincular os dois
+  googleId             String?             @unique
+  facebookId           String?             @unique
+  // Autoriza vincular um login social a esta conta. Sem isso, qualquer um
+  // cria conta num provedor com o e-mail da vitima e assume o acesso.
+  emailVerificado      Boolean             @default(false)
+  avatarUrl            String?
+  // OTP para login/registro via WhatsApp (paridade com cliente)
+  otpCode              String?
+  otpExpiresAt         DateTime?
+  otpAttempts          Int                 @default(0)
+  // Reset de senha — guardamos o HASH do token, nunca o valor enviado ao usuário
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  units                Unit[]
+  barbers              Barber[]
+  services             Service[]
+  appointments         Appointment[]
+  workingHours         WorkingHours[]
+  availabilityBlocks   AvailabilityBlock[]
+  rescheduleRequests   RescheduleRequest[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+}
+
+model Unit {
+  id                 String              @id @default(uuid())
+  ownerId            String
+  owner              Owner               @relation(fields: [ownerId], references: [id])
+  name               String
+  address            String
+  neighborhood       String?
+  active             Boolean             @default(true)
+  barbers            Barber[]
+  appointments       Appointment[]
+  availabilityBlocks AvailabilityBlock[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([ownerId])
+}
+
+model Barber {
+  id                 String              @id @default(uuid())
+  ownerId            String
+  owner              Owner               @relation(fields: [ownerId], references: [id])
+  unitId             String
+  unit               Unit                @relation(fields: [unitId], references: [id])
+  name               String
+  role               String              @default("Barbeiro")
+  rating             Float               @default(5.0)
+  avatarLabel        String?
+  active             Boolean             @default(true)
+  appointments       Appointment[]
+  availabilityBlocks AvailabilityBlock[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([ownerId])
+  @@index([unitId])
+}
+
+model Client {
+  id                   String              @id @default(uuid())
+  name                 String
+  whatsapp             String              @unique
+  email                String?             @unique
+  passwordHash         String?
+  otpCode              String?
+  otpExpiresAt         DateTime?
+  // Tentativas erradas do OTP — zera a cada novo envio, invalida o código ao estourar
+  otpAttempts          Int                 @default(0)
+  // OTP separado por e-mail (permite mudar canal)
+  emailOtpCode         String?
+  emailOtpExpiresAt    DateTime?
+  emailOtpAttempts     Int                 @default(0)
+  // Reset de senha (fallback; cliente normalmente usa OTP)
+  passwordResetToken   String?
+  passwordResetExpires DateTime?
+  loyaltyPoints        Int                 @default(0)
+  // Login social — mesma regra do Owner
+  googleId             String?             @unique
+  facebookId           String?             @unique
+  emailVerificado      Boolean             @default(false)
+  avatarUrl            String?
+  appointments         Appointment[]
+  rescheduleRequests   RescheduleRequest[]
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+}
+
+model Service {
+  id           String        @id @default(uuid())
+  ownerId      String
+  owner        Owner         @relation(fields: [ownerId], references: [id])
+  name         String
+  price        Float
+  durationMin  Int
+  description  String?
+  active       Boolean       @default(true)
+  appointments Appointment[] @relation("ServiceAppointments")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Appointment {
+  id                 String              @id @default(uuid())
+  ownerId            String
+  owner              Owner               @relation(fields: [ownerId], references: [id])
+  unitId             String?
+  unit               Unit?               @relation(fields: [unitId], references: [id])
+  barberId           String?
+  barber             Barber?             @relation(fields: [barberId], references: [id])
+  clientId           String
+  client             Client              @relation(fields: [clientId], references: [id])
+  serviceId          String
+  service            Service             @relation("ServiceAppointments", fields: [serviceId], references: [id])
+  startAt            DateTime
+  endAt              DateTime
+  status             AppointmentStatus   @default(SCHEDULED)
+  googleEventId      String?
+  paymentStatus      PaymentStatus       @default(PENDING)
+  paymentMethod      PaymentMethod?
+  notes              String?
+  loyaltyPointsGiven Boolean             @default(false)
+  rescheduleRequests RescheduleRequest[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([ownerId, startAt])
+  @@index([barberId, startAt])
+  @@index([clientId])
+  @@index([ownerId, status, startAt])
+  @@index([clientId, startAt])
+}
+
+model WorkingHours {
+  id        String  @id @default(uuid())
+  ownerId   String
+  owner     Owner   @relation(fields: [ownerId], references: [id])
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  active    Boolean @default(true)
+
+  @@index([ownerId, dayOfWeek])
+}
+
+// Bloqueios granulares de agenda: dia inteiro ou intervalo específico.
+// barberId opcional — se nulo, aplica a toda a agenda do dono naquela unidade.
+model AvailabilityBlock {
+  id        String   @id @default(uuid())
+  ownerId   String
+  owner     Owner    @relation(fields: [ownerId], references: [id])
+  barberId  String?
+  barber    Barber?  @relation(fields: [barberId], references: [id])
+  unitId    String?
+  unit      Unit?    @relation(fields: [unitId], references: [id])
+  startAt   DateTime
+  endAt     DateTime
+  fullDay   Boolean  @default(false)
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, startAt])
+  @@index([barberId, startAt])
+}
+
+// Pedido de reagendamento (cliente propõe → dono aprova/recusa).
+model RescheduleRequest {
+  id             String           @id @default(uuid())
+  appointmentId  String
+  appointment    Appointment      @relation(fields: [appointmentId], references: [id])
+  clientId       String
+  client         Client           @relation(fields: [clientId], references: [id])
+  ownerId        String
+  owner          Owner            @relation(fields: [ownerId], references: [id])
+  requestedStart DateTime
+  status         RescheduleStatus @default(PENDING)
+  respondedAt    DateTime?
+  message        String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([appointmentId])
+  @@index([ownerId, status])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  CARD
+}
+
+enum RescheduleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED_BY_CLIENT
+}

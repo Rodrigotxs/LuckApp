@@ -1,0 +1,11 @@
+export * as authService from './auth.service';
+export * as clientService from './client.service';
+export * as ownerService from './owner.service';
+export * as unitsService from './units.service';
+export * as barbersService from './barbers.service';
+export * as servicesService from './services.service';
+export * as appointmentsService from './appointments.service';
+export * as availabilityService from './availability.service';
+export * as rescheduleService from './reschedule.service';
+export * as loyaltyService from './loyalty.service';
+export * as financialService from './financial.service';

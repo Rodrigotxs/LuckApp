@@ -1,0 +1,39 @@
+# Nome fixo do projeto Compose.
+#
+# Sem isto o Compose deriva o nome da PASTA, entao o mesmo repositorio clonado
+# em dois lugares vira dois projetos diferentes — e como os servicos abaixo tem
+# container_name fixo, o segundo falha com "container name is already in use".
+# Com o nome fixado, rodar de qualquer pasta reaproveita os mesmos containers.
+name: luckapp
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: barbearia_luck_db
+    environment:
+      POSTGRES_DB: barbearia_luck
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: barbearia_luck_redis
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
