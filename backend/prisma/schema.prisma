@@ -11,7 +11,10 @@ model Owner {
   id                   String              @id @default(uuid())
   name                 String
   email                String              @unique
-  passwordHash         String
+  // Nulavel: dono que entrou por Google/Facebook nunca escolheu senha.
+  // Gravar hash de string aleatoria criaria uma senha que ninguem conhece
+  // mas que existe — alvo sem dono.
+  passwordHash         String?
   whatsapp             String
   barbershopName       String
   barbershopAddress    String?
@@ -21,6 +24,13 @@ model Owner {
   googleRefreshToken   String?
   googleTokenExpiresAt DateTime?
   monthlyGoal          Float?
+  // Login social — ids unicos por provedor, permitindo vincular os dois
+  googleId             String?             @unique
+  facebookId           String?             @unique
+  // Autoriza vincular um login social a esta conta. Sem isso, qualquer um
+  // cria conta num provedor com o e-mail da vitima e assume o acesso.
+  emailVerificado      Boolean             @default(false)
+  avatarUrl            String?
   // OTP para login/registro via WhatsApp (paridade com cliente)
   otpCode              String?
   otpExpiresAt         DateTime?
@@ -94,6 +104,11 @@ model Client {
   passwordResetToken   String?
   passwordResetExpires DateTime?
   loyaltyPoints        Int                 @default(0)
+  // Login social — mesma regra do Owner
+  googleId             String?             @unique
+  facebookId           String?             @unique
+  emailVerificado      Boolean             @default(false)
+  avatarUrl            String?
   appointments         Appointment[]
   rescheduleRequests   RescheduleRequest[]
   createdAt            DateTime            @default(now())
