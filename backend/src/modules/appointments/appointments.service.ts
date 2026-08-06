@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 import { WhatsappService } from '../integrations/whatsapp/whatsapp.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { AgendaRulesService } from './agenda-rules.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateStatusDto, UpdatePaymentDto } from './dto/update-appointment.dto';
 import { addMinutes, parseISO, startOfDay, endOfDay, format } from 'date-fns';
@@ -23,6 +24,7 @@ export class AppointmentsService {
     private googleCalendar: GoogleCalendarService,
     private whatsapp: WhatsappService,
     private loyalty: LoyaltyService,
+    private agenda: AgendaRulesService,
   ) {}
 
   async criar(callerId: string, dto: CreateAppointmentDto, callerRole?: 'client' | 'owner') {
@@ -70,21 +72,15 @@ export class AppointmentsService {
     // O horário precisa cair dentro do expediente e fora dos bloqueios.
     // Antes isto só era checado ao *listar* slots — um POST direto na API
     // conseguia marcar de madrugada ou em cima de um bloqueio do dono.
-    await this.validarJanelaDeAtendimento(dto.ownerId, startAt, endAt, dto.barberId);
+    await this.agenda.validarJanela(dto.ownerId, startAt, endAt, dto.barberId);
 
     // Checagem otimista: dá erro claro no caso comum.
     // A garantia de verdade é a constraint EXCLUDE no banco, logo abaixo —
     // entre este SELECT e o INSERT existe uma janela de corrida que só o
     // banco consegue fechar.
-    const conflito = await this.prisma.appointment.findFirst({
-      where: {
-        ownerId: dto.ownerId,
-        ...(dto.barberId ? { barberId: dto.barberId } : {}),
-        status: { notIn: ['CANCELLED'] },
-        startAt: { lt: endAt },
-        endAt: { gt: startAt },
-      },
-    });
+    const conflito = await this.agenda.encontrarConflito(
+      dto.ownerId, startAt, endAt, dto.barberId,
+    );
     if (conflito) throw new ConflictException('Horário já ocupado');
 
     let appointment: any;
@@ -104,7 +100,7 @@ export class AppointmentsService {
       });
     } catch (e: any) {
       // 23P01 = exclusion_violation -> outro pedido ganhou a corrida.
-      if (e?.code === 'P2010' || e?.meta?.code === '23P01' || /23P01|exclusion/i.test(String(e?.message))) {
+      if (this.agenda.ehConflitoDeBanco(e)) {
         throw new ConflictException('Horário já ocupado');
       }
       throw e;
@@ -251,56 +247,6 @@ export class AppointmentsService {
     return cancelado;
   }
 
-  /**
-   * Garante que o intervalo cai dentro do expediente do dia e não bate num
-   * bloqueio de agenda. Sem isto, quem chama a API direto (sem passar pela
-   * tela de slots) consegue marcar fora do horário de funcionamento.
-   */
-  private async validarJanelaDeAtendimento(
-    ownerId: string,
-    startAt: Date,
-    endAt: Date,
-    barberId?: string,
-  ) {
-    const diaSemana = startAt.getDay();
-    const horario = await this.prisma.workingHours.findFirst({
-      where: { ownerId, dayOfWeek: diaSemana },
-    });
-    if (!horario || !horario.active) {
-      throw new BadRequestException('A barbearia não atende neste dia');
-    }
-
-    const minutos = (d: Date) => d.getHours() * 60 + d.getMinutes();
-    const paraMinutos = (hhmm: string) => {
-      const [h, m] = hhmm.split(':').map(Number);
-      return h * 60 + (m || 0);
-    };
-
-    const inicioExpediente = paraMinutos(horario.startTime);
-    const fimExpediente = paraMinutos(horario.endTime);
-
-    // Se o serviço atravessa a meia-noite, ele já está fora do expediente.
-    const mesmoDia =
-      startAt.getFullYear() === endAt.getFullYear() &&
-      startAt.getMonth() === endAt.getMonth() &&
-      startAt.getDate() === endAt.getDate();
-
-    if (!mesmoDia || minutos(startAt) < inicioExpediente || minutos(endAt) > fimExpediente) {
-      throw new BadRequestException(
-        `Horário fora do expediente (${horario.startTime}–${horario.endTime})`,
-      );
-    }
-
-    const bloqueio = await this.prisma.availabilityBlock.findFirst({
-      where: {
-        ownerId,
-        OR: [{ barberId: null }, ...(barberId ? [{ barberId }] : [])],
-        startAt: { lt: endAt },
-        endAt: { gt: startAt },
-      },
-    });
-    if (bloqueio) throw new ConflictException('Horário bloqueado na agenda');
-  }
 
   private async verificarPropriedadeOwner(ownerId: string, id: string) {
     const appointment = await this.prisma.appointment.findUnique({ where: { id } });

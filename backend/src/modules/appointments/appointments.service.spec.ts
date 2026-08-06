@@ -4,6 +4,7 @@ import { criarPrismaMock, integracoesMock, PrismaMock } from '../../../test/pris
 describe('AppointmentsService', () => {
   let prisma: PrismaMock;
   let deps: ReturnType<typeof integracoesMock>;
+  let agenda: any;
   let service: AppointmentsService;
 
   const OWNER = 'owner-1';
@@ -14,11 +15,19 @@ describe('AppointmentsService', () => {
   beforeEach(() => {
     prisma = criarPrismaMock();
     deps = integracoesMock();
+    // As regras de agenda viraram servico proprio, compartilhado com o
+    // reagendamento — a mesma validacao tem que valer nos dois caminhos.
+    agenda = {
+      validarJanela: jest.fn().mockResolvedValue(undefined),
+      encontrarConflito: jest.fn().mockResolvedValue(null),
+      ehConflitoDeBanco: jest.fn().mockReturnValue(false),
+    };
     service = new AppointmentsService(
       prisma as any,
       deps.googleCalendar as any,
       deps.whatsapp as any,
       deps.loyalty as any,
+      agenda as any,
     );
 
     // Caminho feliz por padrão; cada teste sobrescreve o que precisa.
@@ -92,34 +101,19 @@ describe('AppointmentsService', () => {
       ).rejects.toThrow('Horário no passado');
     });
 
-    it('recusa dia em que a barbearia não atende', async () => {
-      prisma.workingHours.findFirst.mockResolvedValue(null);
-      await expect(service.criar(CLIENT, dto(), 'client')).rejects.toThrow(
-        'não atende neste dia',
+    it('a criação passa pela validação de expediente e bloqueio', async () => {
+      // Regressão: a validação só existia no cálculo de slots, então um POST
+      // direto marcava de madrugada sem passar pela tela.
+      await service.criar(CLIENT, dto({ barberId: undefined }), 'client');
+      expect(agenda.validarJanela).toHaveBeenCalledWith(
+        OWNER, expect.any(Date), expect.any(Date), undefined,
       );
     });
 
-    it('recusa dia marcado como inativo', async () => {
-      prisma.workingHours.findFirst.mockResolvedValue({ active: false, startTime: '09:00', endTime: '18:00' });
-      await expect(service.criar(CLIENT, dto(), 'client')).rejects.toThrow('não atende neste dia');
-    });
-
-    it('recusa horário fora do expediente mesmo chamando a API direto', async () => {
-      // Regressão: a validação de expediente só existia no cálculo de slots,
-      // então um POST direto marcava de madrugada sem passar pela tela.
-      const inicio = new Date(FUTURO);
-      prisma.workingHours.findFirst.mockResolvedValue({
-        active: true,
-        // expediente termina 1 minuto antes do agendamento começar
-        startTime: '00:00',
-        endTime: `${String(inicio.getHours()).padStart(2, '0')}:${String(inicio.getMinutes()).padStart(2, '0')}`,
-      });
+    it('não cria quando a validação de janela recusa', async () => {
+      agenda.validarJanela.mockRejectedValue(new Error('fora do expediente'));
       await expect(service.criar(CLIENT, dto(), 'client')).rejects.toThrow('fora do expediente');
-    });
-
-    it('recusa horário em cima de um bloqueio de agenda', async () => {
-      prisma.availabilityBlock.findFirst.mockResolvedValue({ id: 'bl1' });
-      await expect(service.criar(CLIENT, dto(), 'client')).rejects.toThrow('bloqueado');
+      expect(prisma.appointment.create).not.toHaveBeenCalled();
     });
 
     it('calcula o fim a partir da duração do serviço', async () => {
@@ -132,25 +126,24 @@ describe('AppointmentsService', () => {
 
   describe('criar — conflito de horário', () => {
     it('rejeita quando já existe agendamento sobreposto', async () => {
-      prisma.appointment.findFirst.mockResolvedValue({ id: 'existente' });
+      agenda.encontrarConflito.mockResolvedValue({ id: 'existente' });
       await expect(service.criar(CLIENT, dto(), 'client')).rejects.toThrow('Horário já ocupado');
     });
 
-    it('consulta de conflito usa sobreposição real (início < fim && fim > início)', async () => {
-      await service.criar(CLIENT, dto(), 'client');
-      const where = prisma.appointment.findFirst.mock.calls[0][0].where;
-      expect(where.startAt).toHaveProperty('lt');
-      expect(where.endAt).toHaveProperty('gt');
-      expect(where.status).toEqual({ notIn: ['CANCELLED'] });
+    it('a busca de conflito recebe dono, intervalo e barbeiro', async () => {
+      // O barbeiro precisa existir na barbearia, senão o fluxo para antes.
+      prisma.barber.findFirst.mockResolvedValue({ id: 'b1', ownerId: OWNER });
+      await service.criar(CLIENT, dto({ barberId: 'b1' }), 'client');
+      expect(agenda.encontrarConflito).toHaveBeenCalledWith(
+        OWNER, expect.any(Date), expect.any(Date), 'b1',
+      );
     });
 
     it('traduz violação da constraint do banco em 409, não em 500', async () => {
       // Regressão: entre o SELECT de conflito e o INSERT existe janela de
       // corrida. O banco barra com 23P01 e o usuário precisa ver "ocupado".
-      const erro: any = new Error('exclusion_violation');
-      erro.code = 'P2010';
-      erro.meta = { code: '23P01' };
-      prisma.appointment.create.mockRejectedValue(erro);
+      agenda.ehConflitoDeBanco.mockReturnValue(true);
+      prisma.appointment.create.mockRejectedValue(new Error('exclusion_violation'));
 
       await expect(service.criar(CLIENT, dto(), 'client')).rejects.toThrow('Horário já ocupado');
     });

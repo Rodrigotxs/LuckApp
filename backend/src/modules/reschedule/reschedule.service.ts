@@ -1,5 +1,12 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AgendaRulesService } from '../appointments/agenda-rules.service';
 import { WhatsappService } from '../integrations/whatsapp/whatsapp.service';
 import { CreateRescheduleDto, UpdateRescheduleDto } from './dto/reschedule.dto';
 import { parseISO, addMinutes, format } from 'date-fns';
@@ -10,6 +17,7 @@ export class RescheduleService {
   constructor(
     private prisma: PrismaService,
     private whatsapp: WhatsappService,
+    private agenda: AgendaRulesService,
   ) {}
 
   async solicitar(clientId: string, dto: CreateRescheduleDto) {
@@ -21,6 +29,12 @@ export class RescheduleService {
     if (appointment.clientId !== clientId) throw new ForbiddenException('Sem permissão');
     if (['CANCELLED', 'COMPLETED', 'NO_SHOW'].includes(appointment.status)) {
       throw new BadRequestException('Não é possível remarcar este agendamento');
+    }
+
+    // Recusa horário no passado já aqui. Antes, só a aprovação verificava —
+    // então o pedido ficava pendente na fila do dono para morrer no clique.
+    if (parseISO(dto.requestedStart).getTime() < Date.now() - 60 * 1000) {
+      throw new BadRequestException('Horário solicitado está no passado');
     }
 
     // Cancelar pedidos pendentes anteriores para o mesmo agendamento
@@ -94,26 +108,37 @@ export class RescheduleService {
         throw new BadRequestException('Não é possível aprovar remarcação para horário no passado');
       }
       const newEnd = addMinutes(request.requestedStart, request.appointment.service.durationMin);
+      const barberId = request.appointment.barberId;
 
-      // Verifica conflito no novo horário
-      const conflito = await this.prisma.appointment.findFirst({
-        where: {
-          ownerId,
-          id: { not: request.appointmentId },
-          status: { notIn: ['CANCELLED'] },
-          OR: [
-            { startAt: { gte: request.requestedStart, lt: newEnd } },
-            { endAt: { gt: request.requestedStart, lte: newEnd } },
-            { startAt: { lte: request.requestedStart }, endAt: { gte: newEnd } },
-          ],
-        },
-      });
-      if (conflito) throw new BadRequestException('Horário solicitado indisponível');
+      // As mesmas regras da criação valem aqui. Enquanto elas moravam só no
+      // AppointmentsService, aprovar um reagendamento conseguia mover o
+      // atendimento para fora do expediente ou para cima de um bloqueio.
+      await this.agenda.validarJanela(ownerId, request.requestedStart, newEnd, barberId);
 
-      await this.prisma.appointment.update({
-        where: { id: request.appointmentId },
-        data: { startAt: request.requestedStart, endAt: newEnd },
-      });
+      // O escopo do conflito inclui o barbeiro: antes filtrava só por dono, e
+      // um horário ocupado com outro barbeiro barrava a remarcação sem motivo.
+      const conflito = await this.agenda.encontrarConflito(
+        ownerId,
+        request.requestedStart,
+        newEnd,
+        barberId,
+        request.appointmentId,
+      );
+      if (conflito) throw new ConflictException('Horário solicitado indisponível');
+
+      try {
+        await this.prisma.appointment.update({
+          where: { id: request.appointmentId },
+          data: { startAt: request.requestedStart, endAt: newEnd },
+        });
+      } catch (e: any) {
+        // A constraint EXCLUDE do banco é quem arbitra a corrida. Sem esta
+        // tradução, quem perde recebe 500 com erro de Prisma.
+        if (this.agenda.ehConflitoDeBanco(e)) {
+          throw new ConflictException('Horário solicitado indisponível');
+        }
+        throw e;
+      }
     }
 
     const updated = await this.prisma.rescheduleRequest.update({
