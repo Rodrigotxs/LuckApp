@@ -34,6 +34,19 @@ import {
  * "código expirado" e "código errado" entrega ao atacante um oráculo para
  * descobrir quais números/e-mails estão cadastrados.
  */
+/**
+ * Um canal de OTP: onde o código mora e como zerá-lo.
+ * Isola o que muda entre cliente e dono do que é regra comum.
+ */
+interface CanalOtp {
+  codigo: string | null;
+  expiraEm: Date | null;
+  tentativas: number;
+  informado: string;
+  registrarErro(): Promise<unknown>;
+  invalidar(): Promise<unknown>;
+}
+
 const MSG_OTP_INVALIDO = 'Código inválido ou expirado. Solicite um novo.';
 
 @Injectable()
@@ -128,33 +141,20 @@ export class AuthService {
   async verificarOtp(dto: VerifyOtpDto) {
     const client = await this.prisma.client.findUnique({ where: { whatsapp: dto.whatsapp } });
 
-    // Mensagem única para "não existe", "sem código", "expirado" e "errado":
-    // qualquer diferenciação vira oráculo de enumeração de conta.
-    if (!client || !client.otpCode) throw new BadRequestException(MSG_OTP_INVALIDO);
-
-    if (client.otpExpiresAt && client.otpExpiresAt < new Date()) {
-      await this.limparOtpCliente(client.id);
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    if (client.otpAttempts >= OTP_MAX_ATTEMPTS) {
-      await this.limparOtpCliente(client.id);
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    if (!compararSegredo(client.otpCode, dto.code)) {
-      // Sem contador, um código de 6 dígitos cai por força bruta em minutos.
-      await this.prisma.client.update({
-        where: { id: client.id },
-        data: { otpAttempts: { increment: 1 } },
-      });
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    await this.prisma.client.update({
-      where: { id: client.id },
-      data: { otpCode: null, otpExpiresAt: null, otpAttempts: 0 },
-    });
+    await this.conferirOtp(
+      client && {
+        codigo: client.otpCode,
+        expiraEm: client.otpExpiresAt,
+        tentativas: client.otpAttempts,
+        informado: dto.code,
+        registrarErro: () =>
+          this.prisma.client.update({
+            where: { id: client.id },
+            data: { otpAttempts: { increment: 1 } },
+          }),
+        invalidar: () => this.limparOtpCliente(client.id),
+      },
+    );
 
     const token = this.gerarToken(client.id, 'client');
     return { token, client: { id: client.id, name: client.name, whatsapp: client.whatsapp } };
@@ -192,30 +192,20 @@ export class AuthService {
 
   async verificarOtpClienteEmail(dto: VerifyClientEmailOtpDto) {
     const client = await this.prisma.client.findFirst({ where: { email: dto.email } });
-    if (!client || !client.emailOtpCode) throw new BadRequestException(MSG_OTP_INVALIDO);
-
-    if (client.emailOtpExpiresAt && client.emailOtpExpiresAt < new Date()) {
-      await this.limparOtpEmail(client.id);
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    if (client.emailOtpAttempts >= OTP_MAX_ATTEMPTS) {
-      await this.limparOtpEmail(client.id);
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    if (!compararSegredo(client.emailOtpCode, dto.code)) {
-      await this.prisma.client.update({
-        where: { id: client.id },
-        data: { emailOtpAttempts: { increment: 1 } },
-      });
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    await this.prisma.client.update({
-      where: { id: client.id },
-      data: { emailOtpCode: null, emailOtpExpiresAt: null, emailOtpAttempts: 0 },
-    });
+    await this.conferirOtp(
+      client && {
+        codigo: client.emailOtpCode,
+        expiraEm: client.emailOtpExpiresAt,
+        tentativas: client.emailOtpAttempts,
+        informado: dto.code,
+        registrarErro: () =>
+          this.prisma.client.update({
+            where: { id: client.id },
+            data: { emailOtpAttempts: { increment: 1 } },
+          }),
+        invalidar: () => this.limparOtpEmail(client.id),
+      },
+    );
 
     const token = this.gerarToken(client.id, 'client');
     return { token, client: { id: client.id, name: client.name, email: client.email } };
@@ -330,30 +320,20 @@ export class AuthService {
 
   async verificarOtpOwner(dto: VerifyOwnerOtpDto) {
     const owner = await this.prisma.owner.findFirst({ where: { whatsapp: dto.whatsapp } });
-    if (!owner || !owner.otpCode) throw new BadRequestException(MSG_OTP_INVALIDO);
-
-    if (owner.otpExpiresAt && owner.otpExpiresAt < new Date()) {
-      await this.limparOtpOwner(owner.id);
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    if (owner.otpAttempts >= OTP_MAX_ATTEMPTS) {
-      await this.limparOtpOwner(owner.id);
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    if (!compararSegredo(owner.otpCode, dto.code)) {
-      await this.prisma.owner.update({
-        where: { id: owner.id },
-        data: { otpAttempts: { increment: 1 } },
-      });
-      throw new BadRequestException(MSG_OTP_INVALIDO);
-    }
-
-    await this.prisma.owner.update({
-      where: { id: owner.id },
-      data: { otpCode: null, otpExpiresAt: null, otpAttempts: 0 },
-    });
+    await this.conferirOtp(
+      owner && {
+        codigo: owner.otpCode,
+        expiraEm: owner.otpExpiresAt,
+        tentativas: owner.otpAttempts,
+        informado: dto.code,
+        registrarErro: () =>
+          this.prisma.owner.update({
+            where: { id: owner.id },
+            data: { otpAttempts: { increment: 1 } },
+          }),
+        invalidar: () => this.limparOtpOwner(owner.id),
+      },
+    );
 
     const token = this.gerarToken(owner.id, 'owner');
     return { token, owner: this.sanitizarOwner(owner) };
@@ -415,6 +395,40 @@ export class AuthService {
     });
 
     return { message: 'Senha atualizada com sucesso' };
+  }
+
+  /**
+   * Confere um código de OTP.
+   *
+   * Existe porque a mesma sequência — código ausente, expirado, tentativas
+   * estouradas, código errado — valia para três canais: WhatsApp do cliente,
+   * e-mail do cliente e WhatsApp do dono. Estava escrita três vezes, quase
+   * idêntica. Regra repetida é regra que diverge: a correção entra num lugar
+   * e esquece os outros dois, e ninguém percebe até virar falha de segurança.
+   *
+   * Toda saída de erro usa a MESMA mensagem — diferenciar "não existe" de
+   * "errado" entrega ao atacante um oráculo de enumeração de conta.
+   */
+  private async conferirOtp(canal: CanalOtp | null): Promise<void> {
+    if (!canal?.codigo) throw new BadRequestException(MSG_OTP_INVALIDO);
+
+    if (canal.expiraEm && canal.expiraEm < new Date()) {
+      await canal.invalidar();
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    if (canal.tentativas >= OTP_MAX_ATTEMPTS) {
+      await canal.invalidar();
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    if (!compararSegredo(canal.codigo, canal.informado)) {
+      // Sem contador, um código de 6 dígitos cai por força bruta em minutos.
+      await canal.registrarErro();
+      throw new BadRequestException(MSG_OTP_INVALIDO);
+    }
+
+    await canal.invalidar();
   }
 
   private limparOtpCliente(id: string) {
