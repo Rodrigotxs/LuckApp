@@ -28,6 +28,7 @@ import {
   expiracaoOtp,
   OTP_MAX_ATTEMPTS,
 } from '../../common/security/otp.util';
+import { sanitizarOwner } from '../../common/security/sanitizar';
 
 /**
  * Mensagem única para toda falha de OTP. Diferenciar "conta não existe",
@@ -101,7 +102,7 @@ export class AuthService {
     }
 
     const token = this.gerarToken(owner.id, 'owner');
-    return { token, owner: this.sanitizarOwner(owner) };
+    return { token, owner: sanitizarOwner(owner) };
   }
 
   async loginOwner(dto: LoginOwnerDto) {
@@ -112,7 +113,7 @@ export class AuthService {
     if (!senhaValida) throw new UnauthorizedException('E-mail ou senha inválidos');
 
     const token = this.gerarToken(owner.id, 'owner');
-    return { token, owner: this.sanitizarOwner(owner) };
+    return { token, owner: sanitizarOwner(owner) };
   }
 
   async enviarOtp(dto: SendOtpDto) {
@@ -336,7 +337,7 @@ export class AuthService {
     );
 
     const token = this.gerarToken(owner.id, 'owner');
-    return { token, owner: this.sanitizarOwner(owner) };
+    return { token, owner: sanitizarOwner(owner) };
   }
 
   // ─── Reset de senha (owner) ───────────────────────────────────────
@@ -456,8 +457,4 @@ export class AuthService {
     return this.jwtService.sign({ sub, role });
   }
 
-  private sanitizarOwner(owner: any) {
-    const { passwordHash, googleAccessToken, googleRefreshToken, otpCode, otpExpiresAt, passwordResetToken, passwordResetExpires, ...safe } = owner;
-    return safe;
-  }
 }
