@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateOwnerDto } from './dto/update-owner.dto';
+import { sanitizarOwner } from '../../common/security/sanitizar';
 
 @Injectable()
 export class OwnersService {
@@ -12,12 +13,7 @@ export class OwnersService {
       include: { workingHours: true },
     });
     if (!owner) throw new NotFoundException('Dono não encontrado');
-    const {
-      passwordHash, googleAccessToken, googleRefreshToken,
-      otpCode, otpExpiresAt, passwordResetToken, passwordResetExpires,
-      ...safe
-    } = owner;
-    return { ...safe, googleConnected: Boolean(owner.googleAccessToken && owner.googleRefreshToken) };
+    return sanitizarOwner(owner);
   }
 
   /**
@@ -46,11 +42,6 @@ export class OwnersService {
       if (outro) throw new ConflictException('Este WhatsApp já está em uso');
     }
     const owner = await this.prisma.owner.update({ where: { id }, data: dto });
-    const {
-      passwordHash, googleAccessToken, googleRefreshToken,
-      otpCode, otpExpiresAt, passwordResetToken, passwordResetExpires,
-      ...safe
-    } = owner;
-    return { ...safe, googleConnected: Boolean(owner.googleAccessToken && owner.googleRefreshToken) };
+    return sanitizarOwner(owner);
   }
 }
