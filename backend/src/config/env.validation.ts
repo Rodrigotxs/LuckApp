@@ -23,6 +23,7 @@ export interface EnvValidado {
   CORS_ORIGINS: string[];
   PORT: number;
   NODE_ENV: string;
+  SMTP_HOST: string;
   isProducao: boolean;
 }
 
@@ -55,6 +56,17 @@ export function validarEnv(env: NodeJS.ProcessEnv = process.env): EnvValidado {
     erros.push('CORS_ORIGINS é obrigatória em produção (lista separada por vírgula)');
   }
 
+  /*
+   * Sem SMTP em producao, o reset de senha e o OTP por e-mail nao saem — e o
+   * usuario fica sem caminho para recuperar a conta. Antes isso passava
+   * despercebido porque o servico fingia que tinha enviado.
+   */
+  if (isProducao && !env.SMTP_HOST) {
+    erros.push(
+      'SMTP_HOST e obrigatoria em producao: sem ela o reset de senha e o OTP por e-mail nao funcionam',
+    );
+  }
+
   const porta = Number(env.PORT || 3001);
   if (!Number.isInteger(porta) || porta <= 0 || porta > 65535) {
     erros.push(`PORT inválida: ${env.PORT}`);
@@ -74,6 +86,7 @@ export function validarEnv(env: NodeJS.ProcessEnv = process.env): EnvValidado {
     CORS_ORIGINS: corsOrigins,
     PORT: porta,
     NODE_ENV: nodeEnv,
+    SMTP_HOST: env.SMTP_HOST || '',
     isProducao,
   };
 }
