@@ -3,6 +3,38 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [2.1.0] - 2026-08-07
+
+### ⚠️ Mudança que quebra
+
+- **`SMTP_HOST` passou a ser obrigatória em produção.** Sem ela a API não sobe.
+  Antes o serviço fingia que enviava, então a ausência passava despercebida
+  até um cliente reclamar que nunca recebeu o link de recuperar senha.
+
+### Corrigido
+
+- **O `EmailService` mentia.** Com `SMTP_HOST` definido, registrava
+  "Enviado para..." no log e **não enviava nada**. Reset de senha e OTP por
+  e-mail quebravam em silêncio, com o log dizendo que tinha dado certo. Agora
+  envia de verdade via nodemailer, confere a conexão SMTP na subida e **falha
+  alto** quando não consegue entregar.
+- **Código OTP e link de reset iam para o log.** Sem SMTP, o serviço imprimia
+  o corpo inteiro da mensagem. Em desenvolvimento isso é o mecanismo esperado;
+  em produção era entregar a chave da conta a quem tivesse acesso ao log. Agora
+  o log de produção registra só destinatário e assunto.
+- **E-mail em log sem máscara.** `ana.silva@gmail.com` virou `an***@gmail.com`
+  — dado pessoal sob a LGPD, e log costuma ser centralizado e retido por muito
+  tempo.
+
+### Segurança
+
+- **Sanitização de segredos centralizada.** A remoção de `passwordHash`,
+  tokens do Google e códigos de OTP estava duplicada em três lugares, e nenhuma
+  das cópias foi atualizada quando a migration do login social acrescentou
+  campos. Agora há uma lista única — e um **teste estrutural que lê o
+  `schema.prisma` e falha** se aparecer campo com cara de segredo fora dela.
+  Nada quebra quando um segredo vaza, então a trava precisa ser automática.
+
 ## [2.0.0] - 2026-08-02
 
 Endurecimento de segurança e integridade, mais login social. É MAJOR porque a
