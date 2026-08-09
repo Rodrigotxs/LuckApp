@@ -65,6 +65,29 @@ describe('validarEnv', () => {
     expect(validarEnv({ ...base }).SMTP_HOST).toBe('');
   });
 
+  it('em produção, SMTP_USER sem SMTP_PASS é recusado', () => {
+    // Configuracao pela metade e pior que nenhuma: o .env PARECE configurado,
+    // o servidor recusa a autenticacao, e a falha so aparece quando alguem
+    // precisa recuperar a conta.
+    const prod = {
+      ...base,
+      NODE_ENV: 'production',
+      CORS_ORIGINS: 'https://a.com',
+      SMTP_HOST: 'smtp.gmail.com',
+      SMTP_USER: 'eu@gmail.com',
+    };
+    expect(() => validarEnv(prod)).toThrow(/SMTP_PASS/);
+    expect(() => validarEnv({ ...prod, SMTP_PASS: 'senha-de-app' })).not.toThrow();
+  });
+
+  it('relay sem autenticação continua válido em produção', () => {
+    // Servidor SMTP interno sem login e configuracao legitima — a trava vale
+    // so para usuario preenchido e senha em branco.
+    expect(() =>
+      validarEnv({ ...base, NODE_ENV: 'production', CORS_ORIGINS: 'https://a.com', SMTP_HOST: 'smtp.interno' }),
+    ).not.toThrow();
+  });
+
   it('recusa PORT inválida', () => {
     expect(() => validarEnv({ ...base, PORT: '0' })).toThrow(/PORT/);
     expect(() => validarEnv({ ...base, PORT: 'abc' })).toThrow(/PORT/);

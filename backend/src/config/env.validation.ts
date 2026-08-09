@@ -67,6 +67,19 @@ export function validarEnv(env: NodeJS.ProcessEnv = process.env): EnvValidado {
     );
   }
 
+  /*
+   * Configuracao pela metade e pior que nenhuma.
+   *
+   * Com SMTP_HOST e SMTP_USER preenchidos mas SMTP_PASS vazio, o servidor
+   * recusa a autenticacao e TODO envio falha — mas so na hora em que alguem
+   * precisa recuperar a conta. Quem preencheu o host acredita que configurou.
+   */
+  if (isProducao && env.SMTP_HOST && env.SMTP_USER && !env.SMTP_PASS) {
+    erros.push(
+      'SMTP_PASS e obrigatoria quando SMTP_USER esta definida: sem ela o servidor recusa a autenticacao e nenhum e-mail sai',
+    );
+  }
+
   const porta = Number(env.PORT || 3001);
   if (!Number.isInteger(porta) || porta <= 0 || porta > 65535) {
     erros.push(`PORT inválida: ${env.PORT}`);

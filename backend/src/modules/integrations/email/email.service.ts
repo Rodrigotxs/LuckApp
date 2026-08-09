@@ -30,6 +30,8 @@ export class EmailService implements OnModuleInit {
   private readonly host: string;
   private readonly from: string;
   private readonly isProducao: boolean;
+  /** Host e usuario preenchidos, senha em branco: configuracao pela metade. */
+  private readonly configIncompleta: boolean;
   private transporter: nodemailer.Transporter | null = null;
 
   constructor(private config: ConfigService) {
@@ -37,7 +39,21 @@ export class EmailService implements OnModuleInit {
     this.from = config.get<string>('SMTP_FROM', 'nao-responda@barbearialuck.com');
     this.isProducao = config.get<string>('NODE_ENV') === 'production';
 
-    if (this.host) {
+    const usuario = config.get<string>('SMTP_USER', '');
+    const senha = config.get<string>('SMTP_PASS', '');
+
+    /*
+     * Preencher o host e deixar a senha em branco e uma armadilha comum: o
+     * .env passa a PARECER configurado, o transporter e criado, e todo envio
+     * falha na autenticacao. Fora de producao isso seria uma piora, porque
+     * derruba o modo de desenvolvimento em que o link aparece no log.
+     *
+     * Entao tratamos configuracao pela metade como configuracao ausente, e
+     * dizemos alto o que falta.
+     */
+    this.configIncompleta = Boolean(this.host && usuario && !senha);
+
+    if (this.host && !this.configIncompleta) {
       const porta = Number(config.get('SMTP_PORT', 587));
       this.transporter = nodemailer.createTransport({
         host: this.host,
@@ -61,8 +77,11 @@ export class EmailService implements OnModuleInit {
    */
   async onModuleInit() {
     if (!this.transporter) {
-      const aviso =
-        'SMTP_HOST não configurado: e-mails de OTP e reset NÃO serão enviados.';
+      const aviso = this.configIncompleta
+        ? `SMTP_HOST="${this.host}" e SMTP_USER estão definidos, mas SMTP_PASS está VAZIA. ` +
+          'Sem a senha o servidor recusa a autenticação, então nada será enviado. ' +
+          'No Gmail, use uma senha de app (myaccount.google.com/apppasswords) — não a senha da conta.'
+        : 'SMTP_HOST não configurado: e-mails de OTP e reset NÃO serão enviados.';
       if (this.isProducao) {
         // Em produção isso é falha de configuração, não modo de desenvolvimento.
         this.logger.error(`${aviso} O fluxo de recuperação de conta está quebrado.`);
