@@ -1,6 +1,6 @@
 {
   "name": "barbearia-luck-backend",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Backend da Barbearia Luck",
   "private": true,
   "scripts": {
@@ -42,7 +42,7 @@
     "dotenv": "^16.4.5",
     "googleapis": "^144.0.0",
     "helmet": "^7.2.0",
-    "nodemailer": "^6.10.1",
+    "nodemailer": "^9.0.5",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
@@ -70,5 +70,13 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.4.3"
+  },
+  "allowScripts": {
+    "prisma@5.22.0": true,
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "@swc/core@1.15.47": true,
+    "unrs-resolver@1.12.2": true,
+    "@nestjs/core": false
   }
 }
