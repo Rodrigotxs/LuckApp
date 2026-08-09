@@ -3,6 +3,47 @@
 Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/)
 e versionamento [SemVer](https://semver.org/lang/pt-BR/).
 
+## [3.0.0] - 2026-08-09
+
+É MAJOR pelo mesmo critério da 2.0.0: a aplicação passou a **recusar subir**
+com uma configuração que antes era aceita. Na prática nenhum ambiente que
+funcionava para de funcionar — a configuração agora recusada já falhava em
+todo envio, só que em silêncio.
+
+### ⚠️ Mudança que quebra
+
+- **`SMTP_PASS` passou a ser obrigatória em produção quando `SMTP_USER` está
+  definida.** Preencher o host e o usuário e deixar a senha em branco fazia o
+  servidor recusar a autenticação: o `.env` parecia configurado e nenhum
+  e-mail saía. A falha só aparecia quando alguém precisava recuperar a conta.
+  Relay interno sem autenticação (host sem usuário) continua válido.
+
+### Segurança
+
+- **`nodemailer` subiu de 6.10.1 para 9.0.5.** A faixa que eu tinha escolhido
+  na 2.1.0 (`^6.10.1`) carrega uma falha de severidade alta: um conflito de
+  interpretação de endereço pode fazer a mensagem ser entregue a um **domínio
+  não pretendido** — num serviço cujo conteúdo é código OTP e link de reset,
+  isso é entregar a chave da conta ao destinatário errado. Corrigido a partir
+  da 7.0.7.
+
+### Corrigido
+
+- **Configuração de SMTP pela metade derrubava o modo de desenvolvimento.**
+  Com host preenchido e senha vazia, o `EmailService` criava o transporter e
+  passava a estourar em todo envio — trocando o mecanismo que funcionava, o
+  link de reset impresso no log, por nada. Agora configuração incompleta é
+  tratada como configuração ausente, e o log diz exatamente qual variável
+  falta.
+- **`dev.cmd` abortava ao tentar abrir o Docker Desktop.** Quando exatamente
+  um dos caminhos candidatos existia, o `Where-Object` devolvia uma string em
+  vez de uma lista, e `$caminhos[0]` passava a indexar o texto — entregando o
+  caractere `C` ao `Start-Process`. O erro resultante apontava para o Docker e
+  escondia a causa. O `Start-Process` também **lança exceção** quando o
+  executável não existe, o que `-ErrorAction SilentlyContinue` não intercepta;
+  agora é `try/catch`, e o script segue esperando o Docker mesmo se não
+  conseguir abri-lo.
+
 ## [2.1.0] - 2026-08-07
 
 ### ⚠️ Mudança que quebra

@@ -74,6 +74,38 @@ describe('EmailService', () => {
       expect(sendMail).not.toHaveBeenCalled();
     });
 
+    it('config pela metade (host e user sem senha) NÃO cria transporter', () => {
+      // Armadilha real: quem preenche o host acredita que configurou. O
+      // transporter subiria, toda autenticação falharia, e o modo de
+      // desenvolvimento — o link no log — teria sido destruído em troca de
+      // nada.
+      criar({ SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'eu@gmail.com', SMTP_PASS: '' });
+      expect(nodemailerMock.createTransport).not.toHaveBeenCalled();
+    });
+
+    it('config pela metade fora de produção cai no log, não estoura', async () => {
+      const s = criar({ SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'eu@gmail.com', SMTP_PASS: '' });
+      await expect(s.enviarOtp('ana@x.com', '123456')).resolves.toBeUndefined();
+      expect(sendMail).not.toHaveBeenCalled();
+    });
+
+    it('config pela metade diz exatamente qual variável falta', async () => {
+      const s = criar({ SMTP_HOST: 'smtp.gmail.com', SMTP_USER: 'eu@gmail.com', SMTP_PASS: '' });
+      const avisos: string[] = [];
+      jest.spyOn((s as any).logger, 'warn').mockImplementation((m: any) => avisos.push(String(m)));
+
+      await s.onModuleInit();
+
+      expect(avisos.join('\n')).toContain('SMTP_PASS');
+    });
+
+    it('host sem user algum continua válido — servidor SMTP aberto', () => {
+      // Relay interno sem autenticação é configuração legítima; a trava é
+      // só para user preenchido e senha em branco.
+      criar({ SMTP_HOST: 'smtp.interno.local' });
+      expect(nodemailerMock.createTransport).toHaveBeenCalled();
+    });
+
     it('fora de produção sem SMTP, registra no log e segue', async () => {
       // É o mecanismo documentado de desenvolvimento: o código de OTP é lido
       // do log do backend.
