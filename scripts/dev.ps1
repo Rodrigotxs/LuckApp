@@ -96,6 +96,55 @@ function Get-NativeOut {
   }
 }
 
+<#
+  Garante que node_modules corresponde ao package.json ATUAL.
+
+  A versao anterior perguntava apenas "a pasta node_modules existe?" e, em
+  caso afirmativo, escrevia "Dependencias instaladas". Isso e verdade so na
+  primeira vez: quando o projeto ganha uma dependencia nova, a pasta continua
+  existindo, a instalacao e pulada, e o backend morre com "Cannot find module"
+  — depois de o script ter afirmado que estava tudo certo.
+
+  O npm reescreve node_modules/.package-lock.json a cada instalacao, entao ele
+  serve de marca d'agua: se o package.json ou o package-lock.json forem mais
+  recentes que ela, o que esta instalado ficou para tras.
+#>
+function Confirmar-Dependencias {
+  param(
+    [Parameter(Mandatory)][string]$Pasta,
+    [Parameter(Mandatory)][string]$Nome
+  )
+
+  $modules  = Join-Path $Pasta 'node_modules'
+  $marca    = Join-Path $modules '.package-lock.json'
+  $pkg      = Join-Path $Pasta 'package.json'
+  $lock     = Join-Path $Pasta 'package-lock.json'
+
+  $motivo = $null
+  if (-not (Test-Path -LiteralPath $modules)) {
+    $motivo = 'node_modules ausente'
+  } elseif (-not (Test-Path -LiteralPath $marca)) {
+    $motivo = 'instalacao incompleta ou feita por outra ferramenta'
+  } else {
+    $refs = @($pkg, $lock) | Where-Object { Test-Path -LiteralPath $_ }
+    $marcaEm = (Get-Item -LiteralPath $marca).LastWriteTimeUtc
+    foreach ($r in $refs) {
+      if ((Get-Item -LiteralPath $r).LastWriteTimeUtc -gt $marcaEm) {
+        $motivo = "$(Split-Path $r -Leaf) mudou depois da ultima instalacao"
+        break
+      }
+    }
+  }
+
+  if ($motivo) {
+    Write-Fix "$Nome`: $motivo - instalando (pode demorar alguns minutos)"
+    if ((Invoke-Native 'npm' @('install')) -ne 0) { Die "npm install do $Nome falhou" }
+    Write-Ok "$Nome`: dependencias atualizadas"
+  } else {
+    Write-Ok "$Nome`: dependencias em dia"
+  }
+}
+
 Write-Host @"
 
   BARBEARIA LUCK - ambiente de desenvolvimento
@@ -120,16 +169,34 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
 if ((Invoke-Native 'docker' @('info') -Silencioso) -ne 0) {
   Write-Fix 'Docker Desktop parece parado - tentando abrir e aguardando ate 120s...'
 
+  # O @( ) EXTERNO e obrigatorio. Sem ele, quando so um caminho existe, o
+  # Where-Object devolve uma string em vez de um array de um item -- e
+  # $caminhos[0] passa a indexar o TEXTO, entregando o caractere 'C' ao
+  # Start-Process. O erro resultante ("nao pode encontrar o arquivo
+  # especificado") aponta para o Docker e nao para o indice, que e o que
+  # torna a falha demorada de achar.
   $caminhos = @(
     "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
     "${env:ProgramFiles(x86)}\Docker\Docker\Docker Desktop.exe",
-    "$env:LOCALAPPDATA\Docker\Docker Desktop.exe"
-  ) | Where-Object { Test-Path $_ }
+    "$env:LOCALAPPDATA\Docker\Docker Desktop.exe",
+    "$env:ProgramW6432\Docker\Docker\Docker Desktop.exe"
+  ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+  $caminhos = @($caminhos)
 
-  if ($caminhos) {
-    Start-Process -FilePath $caminhos[0] -ErrorAction SilentlyContinue
+  if ($caminhos.Count -gt 0) {
+    # try/catch, nao -ErrorAction: o Start-Process LANCA excecao quando o
+    # executavel nao existe, e excecao lancada ignora -ErrorAction
+    # SilentlyContinue. Era por isso que o script morria aqui em vez de
+    # seguir para a espera.
+    try {
+      Start-Process -FilePath $caminhos[0]
+    } catch {
+      Write-Warn "Nao consegui abrir o Docker Desktop ($($_.Exception.Message))"
+      Write-Warn 'Abra manualmente - vou esperar mesmo assim.'
+    }
   } else {
-    Write-Warn 'Nao achei o executavel do Docker Desktop - abra manualmente'
+    Write-Warn 'Nao achei o executavel do Docker Desktop - abra manualmente.'
+    Write-Warn 'Vou esperar ate 120s por ele.'
   }
 
   $esperou = 0
@@ -307,11 +374,7 @@ Write-Step '4/6  Backend'
 
 Push-Location $BACKEND
 try {
-  if (-not (Test-Path (Join-Path $BACKEND 'node_modules'))) {
-    Write-Fix 'node_modules ausente - instalando (pode demorar alguns minutos)'
-    if ((Invoke-Native 'npm' @('install')) -ne 0) { Die 'npm install do backend falhou' }
-  }
-  Write-Ok 'Dependencias instaladas'
+  Confirmar-Dependencias -Pasta $BACKEND -Nome 'backend'
 
   # O client do Prisma e gerado; sem ele o backend nao sobe.
   if ((Invoke-Native 'npx' @('prisma', 'generate') -Silencioso) -ne 0) {
@@ -372,11 +435,7 @@ Write-Step '5/6  Frontend'
 
 Push-Location $FRONTEND
 try {
-  if (-not (Test-Path (Join-Path $FRONTEND 'node_modules'))) {
-    Write-Fix 'node_modules ausente - instalando'
-    if ((Invoke-Native 'npm' @('install')) -ne 0) { Die 'npm install do frontend falhou' }
-  }
-  Write-Ok 'Dependencias instaladas'
+  Confirmar-Dependencias -Pasta $FRONTEND -Nome 'frontend'
 } finally { Pop-Location }
 
 # ── 6. subir os servidores ───────────────────────────────────────────────
